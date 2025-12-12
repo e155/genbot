@@ -36,12 +36,26 @@ def init_db():
             fuel_used REAL
         )
         """)
+
         conn.execute("""
         CREATE TABLE IF NOT EXISTS state (
             key TEXT PRIMARY KEY,
             value TEXT
         )
         """)
+
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS refuel_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            amount REAL,
+            fuel_before REAL,
+            fuel_after REAL,
+            user_id INTEGER,
+            username TEXT
+        )
+        """)
+
 
 def get_state(key, default=None):
     with sqlite3.connect(DB_FILE) as conn:
@@ -129,15 +143,41 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Invalid fuel amount")
         return
 
-    fuel_left = float(get_state("fuel_left", INITIAL_FUEL))
-    new_level = min(TANK_CAPACITY, fuel_left + amount)
+    user = update.effective_user
+    user_id = user.id
+    username = user.username or user.full_name
 
-    set_state("fuel_left", new_level)
+    fuel_before = float(get_state("fuel_left", INITIAL_FUEL))
+    fuel_after = min(TANK_CAPACITY, fuel_before + amount)
+
+    set_state("fuel_left", fuel_after)
+
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("""
+            INSERT INTO refuel_log (
+                timestamp,
+                amount,
+                fuel_before,
+                fuel_after,
+                user_id,
+                username
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            dt.datetime.now().isoformat(),
+            amount,
+            fuel_before,
+            fuel_after,
+            user_id,
+            username
+        ))
 
     await update.message.reply_text(
-        f"Refueled: {amount:.1f} L\n"
-        f"Fuel level: {new_level:.1f} / {TANK_CAPACITY:.1f} L"
+        f"Refuel recorded\n"
+        f"Added: {amount:.1f} L\n"
+        f"Fuel level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
+        f"By: {username}"
     )
+
 
 # ================= MONITOR =================
 
