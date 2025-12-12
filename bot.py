@@ -87,6 +87,54 @@ def ping(host: str) -> bool:
 
 def fuel_used(seconds: int) -> float:
     return (seconds / 3600.0) * FUEL_CONSUMPTION
+# ================ Ref history ============
+async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Usage: /refuel_history <days>")
+        return
+
+    try:
+        days = int(context.args[0])
+        if days <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Invalid number of days")
+        return
+
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute("""
+            SELECT
+                timestamp,
+                amount,
+                fuel_before,
+                fuel_after,
+                username
+            FROM refuel_log
+            WHERE timestamp >= datetime('now', ?)
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """, (f"-{days} days",))
+
+        rows = cur.fetchall()
+
+    if not rows:
+        await update.message.reply_text(
+            f"No refuel records for last {days} days"
+        )
+        return
+
+    lines = [f"Refuel history (last {days} days):\n"]
+
+    for ts, amount, before, after, user in rows:
+        time_str = ts.replace("T", " ")[:16]
+        lines.append(
+            f"{time_str} | +{amount:.1f} L | "
+            f"{before:.1f} → {after:.1f} | {user}"
+        )
+
+    await update.message.reply_text("\n".join(lines))
+
+
 
 # ================= TELEGRAM =================
 
@@ -267,7 +315,8 @@ HELP_TEXT = (
     "  Statistics for last 24 hours and last 7 days\n\n"
     "/refuel <liters>\n"
     "  Add fuel to the tank\n"
-    "  Example: /refuel 50"
+    "  Example: /refuel 50\n"
+    "/rhistory"
 )
 
 async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
@@ -286,6 +335,8 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))   
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("refuel", refuel_cmd))
+    app.add_handler(CommandHandler("rhistory", refuel_history_cmd))
+
 
     async def post_init(app: Application):
         app.create_task(monitor(app))
