@@ -216,13 +216,34 @@ async def monitor(app: Application):
 
         await asyncio.sleep(INTERVAL)
 
-# ================= MAIN =================
+# ================= HELP =================
 
+
+HELP_TEXT = (
+    "Generator monitoring bot\n\n"
+    "Available commands:\n\n"
+    "/status\n"
+    "  Show generator status\n"
+    "  Statistics for last 24 hours and last 7 days\n\n"
+    "/refuel <liters>\n"
+    "  Add fuel to the tank\n"
+    "  Example: /refuel 50"
+)
+
+async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(HELP_TEXT)
+
+async def help_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(HELP_TEXT)
+
+# ================= MAIN ==================
 def main():
     init_db()
 
     app = Application.builder().token(TOKEN).build()
 
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("help", help_cmd))   
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("refuel", refuel_cmd))
 
