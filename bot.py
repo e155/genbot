@@ -155,6 +155,18 @@ def get_stats(hours: int):
         row = cur.fetchone()
         return row[0] or 0, row[1] or 0
 
+# ================= restart msg =================
+async def startup_message(app: Application):
+    now = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    await app.bot.send_message(
+        chat_id=CHANNELID,
+        text=(
+            "Generator bot restarted\n"
+            f"Time: {now}"
+        )
+    )
+
+
 # ================= COMMANDS =================
 
 async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
@@ -322,28 +334,37 @@ HELP_TEXT = (
 async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
 
+
+    async def post_init(app: Application):
+      await startup_message(app)
+      app.create_task(monitor(app))
+
+
+
 async def help_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
 
 # ================= MAIN ==================
+async def post_init(app: Application):
+    await startup_message(app)
+    app.create_task(monitor(app))
+
+
 def main():
     init_db()
 
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_cmd))
-    app.add_handler(CommandHandler("help", help_cmd))   
+    app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("refuel", refuel_cmd))
     app.add_handler(CommandHandler("rhistory", refuel_history_cmd))
-
-
-    async def post_init(app: Application):
-        app.create_task(monitor(app))
-
     app.post_init = post_init
-
     app.run_polling()
+
+
+
 
 if __name__ == "__main__":
     main()
