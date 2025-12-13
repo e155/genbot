@@ -170,27 +170,35 @@ async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     for ts, amount, before, after, user in rows:
         time_str = ts.replace("T", " ")[:16]
+        if amount > 0:
+            action = f"+{amount:.1f} L"
+        else:
+            action = "RESET"
+
         lines.append(
-            f"{time_str} | +{amount:.1f} L | "
+            f"{time_str} | {action} | "
             f"{before:.1f} → {after:.1f} | {user}"
-        )
+)
+
 
     await update.message.reply_text("\n".join(lines))
 
 # ================= History =====================
 
 async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    # default: 1 day
     if not context.args:
-        await update.message.reply_text("Usage: /history <days>")
-        return
-
-    try:
-        days = int(context.args[0])
-        if days <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("Invalid number of days")
-        return
+        days = 1
+    else:
+        try:
+            days = int(context.args[0])
+            if days <= 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text(
+                "Usage: /history [days]\nExample: /history 7"
+            )
+            return
 
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.execute("""
@@ -204,15 +212,16 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
             ORDER BY start_time DESC
             LIMIT 10
         """, (f"-{days} days",))
+
         rows = cur.fetchall()
 
     if not rows:
         await update.message.reply_text(
-            f"No generator activity for last {days} days"
+            f"No generator activity for last {days} day(s)"
         )
         return
 
-    lines = [f"Generator history (last {days} days):\n"]
+    lines = [f"Generator history (last {days} day(s)):\n"]
 
     for start, stop, runtime, fuel in rows:
         start_s = start.replace("T", " ")[:16]
@@ -337,6 +346,64 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         f"By: {username}"
     )
 
+async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Usage: /reset_fuel <liters>")
+        return
+
+    try:
+        value = float(context.args[0])
+        if value < 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Invalid fuel value")
+        return
+
+    if value > TANK_CAPACITY:
+        await update.message.reply_text(
+            f"Fuel value exceeds tank capacity ({TANK_CAPACITY:.1f} L)"
+        )
+        return
+
+    user = update.effective_user
+    user_id = user.id
+    username = user.username or user.full_name
+
+    fuel_before = float(get_state("fuel_left", INITIAL_FUEL))
+    fuel_after = value
+
+    # set fuel directly
+    set_state("fuel_left", fuel_after)
+
+    # reset low fuel alert
+    set_state("low_fuel_alerted", 0)
+
+    # log reset as a special refuel record
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("""
+            INSERT INTO refuel_log (
+                timestamp,
+                amount,
+                fuel_before,
+                fuel_after,
+                user_id,
+                username
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            dt.datetime.now().isoformat(),
+            0.0,                 # amount = 0 → reset
+            fuel_before,
+            fuel_after,
+            user_id,
+            f"{username} (reset)"
+        ))
+
+    await update.message.reply_text(
+        f"Fuel level RESET\n"
+        f"New level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
+        f"By: {username}"
+    )
+
 
 # ================= MONITOR =================
 async def monitor(app: Application):
@@ -451,15 +518,33 @@ async def monitor(app: Application):
 HELP_TEXT = (
     "Generator monitoring bot\n\n"
     "Available commands:\n\n"
+
     "/status\n"
-    "  Show generator status\n"
+    "  Show current generator status\n"
+    "  Fuel level and estimated remaining runtime\n"
     "  Statistics for last 24 hours and last 7 days\n\n"
+
+    "/history [days]\n"
+    "  Generator start/stop history and fuel usage\n"
+    "  Default: 1 day\n"
+    "  Example: /history 7\n\n"
+
     "/refuel <liters>\n"
     "  Add fuel to the tank\n"
-    "  Example: /refuel 50\n"
+    "  Example: /refuel 50\n\n"
+
     "/rhistory <days>\n"
-    "  Show refueling history\n"
+    "  Refuel/reset history\n"
+    "  Example: /rhistory 7\n\n"
+
+    "/reset_fuel <liters>\n"
+    "  Force set current fuel level\n"
+    "  Example: /reset_fuel 190\n\n"
+
+    "/help\n"
+    "  Show this help message"
 )
+
 
 async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
@@ -486,6 +571,7 @@ def main():
     app.add_handler(CommandHandler("refuel", refuel_cmd))
     app.add_handler(CommandHandler("rhistory", refuel_history_cmd))
     app.add_handler(CommandHandler("history", history_cmd))
+    app.add_handler(CommandHandler("reset_fuel", reset_fuel_cmd))
     app.post_init = post_init
     app.run_polling()
 
