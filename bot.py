@@ -217,11 +217,11 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     if not rows:
         await update.message.reply_text(
-            f"No generator activity for last {days} day(s)"
+            f"❕No generator activity for last {days} day(s)"
         )
         return
 
-    lines = [f"Generator history (last {days} day(s)):\n"]
+    lines = [f"❕Generator history (last {days} day(s)):\n"]
 
     for start, stop, runtime, fuel in rows:
         start_s = start.replace("T", " ")[:16]
@@ -264,7 +264,7 @@ async def startup_message(app: Application):
     await app.bot.send_message(
         chat_id=CHANNELID,
         text=(
-            "Generator bot restarted\n"
+            "❗️Generator bot restarted\n"
             f"Time: {now}"
         )
     )
@@ -281,16 +281,16 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     week_runtime, week_fuel = get_stats(24 * 7)
 
     msg = (
-        f"STATUS: {GENERATORNAME}\n\n"
-        f"State: {'RUNNING' if running else 'STOPPED'}\n"
-        f"Fuel left: {fuel_left:.1f} L\n\n"
-        f"Estimated runtime: {remaining_time}\n\n"
+        f"❕STATUS: {GENERATORNAME}\n\n"
+        f"State: {'🌀RUNNING' if running else '❌STOPPED'}\n"
+        f"⛽️Fuel left: {fuel_left:.1f} L\n\n"
+        f"⏳Estimated runtime: {remaining_time}\n\n"
         f"Last 24h:\n"
-        f"  Runtime: {day_runtime // 3600}h {(day_runtime % 3600) // 60}m\n"
-        f"  Fuel used: {day_fuel:.1f} L\n\n"
+        f"⏱️  Runtime: {day_runtime // 3600}h {(day_runtime % 3600) // 60}m\n"
+        f"⛽️🔽 Fuel used: {day_fuel:.1f} L\n\n"
         f"Last 7 days:\n"
-        f"  Runtime: {week_runtime // 3600}h {(week_runtime % 3600) // 60}m\n"
-        f"  Fuel used: {week_fuel:.1f} L"
+        f"⏱️  Runtime: {week_runtime // 3600}h {(week_runtime % 3600) // 60}m\n"
+        f"⛽️🔽 Fuel used: {week_fuel:.1f} L"
     )
 
     await update.message.reply_text(msg)
@@ -340,10 +340,10 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
 
     await update.message.reply_text(
-        f"Refuel recorded\n"
-        f"Added: {amount:.1f} L\n"
-        f"Fuel level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
-        f"By: {username}"
+        f"❕Refuel recorded\n"
+        f"🔄Added: {amount:.1f} L\n"
+        f"⛽️Fuel level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
+        f"👨🏻‍🦱By: {username}"
     )
 
 async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
@@ -400,9 +400,9 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"Fuel level RESET\n"
-        f"New level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
-        f"By: {username}"
-    )
+        f"⛽️New level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
+        f"👨🏻‍🦱By: {username}"
+            )
 
 
 # ================= MONITOR =================
@@ -426,10 +426,10 @@ async def monitor(app: Application):
                 remaining_time = format_remaining_time(fuel_now)
                 await send(
                     app,
-                    f"ALERT: Low fuel for {GENERATORNAME}\n"
-                    f"Fuel left (est.): {fuel_now:.1f} L\n"
-                    f"Estimated runtime: {remaining_time}\n"
-                    f"Threshold: < {LOW_FUEL_HOURS:.2f} h"
+                    f"❗️❗️❗️ALERT: Low fuel for {GENERATORNAME}\n"
+                    f"⛽️Fuel left (est.): {fuel_now:.1f} L\n"
+                    f"⏳Estimated runtime: {remaining_time}\n"
+                    f"❗️Threshold: < {LOW_FUEL_HOURS:.2f} h"
                 )
                 set_state("low_fuel_alerted", 1)
 
@@ -451,9 +451,9 @@ async def monitor(app: Application):
 
             await send(
                 app,
-                f"{GENERATORNAME} STARTED\n"
-                f"Fuel left: {fuel_now:.1f} L\n"
-                f"Estimated runtime: {remaining_time}"
+                f"🌀{GENERATORNAME} STARTED\n"
+                f"⛽️Fuel left: {fuel_now:.1f} L\n"
+                f"⏳Estimated runtime: {remaining_time}"
             )
 
         # STOP
@@ -480,11 +480,11 @@ async def monitor(app: Application):
 
             await send(
                 app,
-                f"{GENERATORNAME} STOPPED\n"
-                f"Runtime: {runtime // 60} min\n"
-                f"Fuel used: {used:.1f} L\n"
-                f"Fuel left: {fuel_left:.1f} L\n"
-                f"Estimated runtime: {remaining_time}"
+                f"❌{GENERATORNAME} STOPPED\n"
+                f"⏱️Runtime: {runtime // 60} min\n"
+                f"⛽️Fuel used: {used:.1f} L\n"
+                f"⛽️Fuel left: {fuel_left:.1f} L\n"
+                f"⏳Estimated runtime: {remaining_time}"
             )
 
         # DAILY REPORT
@@ -500,11 +500,11 @@ async def monitor(app: Application):
 
             await send(
                 app,
-                f"DAILY REPORT: {GENERATORNAME}\n"
-                f"Runtime: {day_runtime // 3600}h {(day_runtime % 3600)//60}m\n"
-                f"Fuel used: {day_fuel:.1f} L\n"
-                f"Fuel left: {fuel_now:.1f} L\n"
-                f"Estimated runtime: {remaining_time}"
+                f"❕DAILY REPORT: {GENERATORNAME}\n"
+                f"⏱️Runtime: {day_runtime // 3600}h {(day_runtime % 3600)//60}m\n"
+                f"⛽️Fuel used: {day_fuel:.1f} L\n"
+                f"⛽️Fuel left: {fuel_now:.1f} L\n"
+                f"⏳Estimated runtime: {remaining_time}"
             )
 
             await asyncio.sleep(60)
