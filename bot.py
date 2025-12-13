@@ -177,6 +177,57 @@ async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n".join(lines))
 
+# ================= History =====================
+
+async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Usage: /history <days>")
+        return
+
+    try:
+        days = int(context.args[0])
+        if days <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Invalid number of days")
+        return
+
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute("""
+            SELECT
+                start_time,
+                stop_time,
+                runtime_seconds,
+                fuel_used
+            FROM generator_log
+            WHERE start_time >= datetime('now', ?)
+            ORDER BY start_time DESC
+            LIMIT 10
+        """, (f"-{days} days",))
+        rows = cur.fetchall()
+
+    if not rows:
+        await update.message.reply_text(
+            f"No generator activity for last {days} days"
+        )
+        return
+
+    lines = [f"Generator history (last {days} days):\n"]
+
+    for start, stop, runtime, fuel in rows:
+        start_s = start.replace("T", " ")[:16]
+        stop_s = stop.replace("T", " ")[:16] if stop else "N/A"
+
+        hours = runtime // 3600
+        minutes = (runtime % 3600) // 60
+
+        lines.append(
+            f"{start_s} → {stop_s}\n"
+            f"  Runtime: {hours}h {minutes}m\n"
+            f"  Fuel used: {fuel:.1f} L"
+        )
+
+    await update.message.reply_text("\n".join(lines))
 
 
 # ================= TELEGRAM =================
@@ -434,6 +485,7 @@ def main():
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("refuel", refuel_cmd))
     app.add_handler(CommandHandler("rhistory", refuel_history_cmd))
+    app.add_handler(CommandHandler("history", history_cmd))
     app.post_init = post_init
     app.run_polling()
 

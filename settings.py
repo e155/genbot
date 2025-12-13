@@ -19,6 +19,8 @@ REPORTM = int(os.getenv("REPORTM",0))
 TANK_CAPACITY = int(os.getenv("TANK_CAPACITY", 240))
 FUEL_CONSUMPTION = float(os.getenv("FUEL_CONSUMPTION", 16))
 INITIAL_FUEL = float(os.getenv("INITIAL_FUEL", 190))
+LOW_FUEL_HOURS = float(os.getenv("LOW_FUEL_HOURS", 4))
+
 
 # Database file
 DB_FILE = "generator.db"
