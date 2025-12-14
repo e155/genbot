@@ -299,7 +299,7 @@ def apply_fuel_setpoint_while_running(new_effective_fuel: float, now: dt.datetim
 # ================ Ref history ============
 async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /refuel_history <days>")
+        await update.message.reply_text("Usage: /rhistory <days>")
         return
 
     try:
