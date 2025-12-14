@@ -22,7 +22,8 @@ from settings import (
     FUEL_CONSUMPTION,
     INITIAL_FUEL,
     DB_FILE,
-    LOW_FUEL_HOURS
+    LOW_FUEL_HOURS,
+    ADMIN_USER_ID
 )
 
 # ================= DATABASE =================
@@ -57,6 +58,120 @@ def init_db():
             username TEXT
         )
         """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            added_at TEXT
+        )
+        """)
+
+def is_user_allowed(user_id: int) -> bool:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute(
+            "SELECT 1 FROM users WHERE user_id = ?",
+            (user_id,)
+        )
+        return cur.fetchone() is not None
+
+
+def add_user_to_whitelist(user_id: int, username: str | None):
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("""
+            INSERT OR IGNORE INTO users (user_id, username, added_at)
+            VALUES (?, ?, ?)
+        """, (
+            user_id,
+            username,
+            dt.datetime.now().isoformat()
+        ))
+
+
+def remove_user_from_whitelist(user_id: int):
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute(
+            "DELETE FROM users WHERE user_id = ?",
+            (user_id,)
+        )
+
+def whitelist_required(handler):
+    async def wrapper(update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+
+        if not user:
+            return
+
+        if not is_user_allowed(user.id):
+            await update.message.reply_text(
+                "⛔ Access denied.\n"
+                "You are not authorized to use this bot."
+            )
+            return
+
+        return await handler(update, context)
+
+    return wrapper
+
+def get_whitelist_users():
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute("""
+            SELECT user_id, username, added_at
+            FROM users
+            ORDER BY added_at ASC
+        """)
+        return cur.fetchall()
+
+
+#===allow id ====
+async def allow_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text("⛔ Admin only")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /allow <user_id>")
+        return
+
+    try:
+        uid = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("Invalid user_id")
+        return
+
+    add_user_to_whitelist(uid, None)
+    await update.message.reply_text(f"✅ User {uid} added to whitelist")
+
+#===deny id ====
+async def deny_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text("⛔ Admin only")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /deny <user_id>")
+        return
+
+    try:
+        uid = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("Invalid user_id")
+        return
+
+    remove_user_from_whitelist(uid)
+    await update.message.reply_text(f"❌ User {uid} removed from whitelist")
+
+#===my id ====
+
+async def whoami_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    username_line = f"\nUsername: @{user.username}" if user.username else ""
+    await update.message.reply_text(
+        f"👤 Your ID: {user.id}{username_line}"
+            )
 
 
 def get_state(key, default=None):
@@ -300,6 +415,28 @@ def bot_link_keyboard():
         [InlineKeyboardButton("🔗 Open bot", url=f"https://t.me/gdsfvrwerfvbot")]
     ])
 
+async def users_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text("⛔ Admin only")
+        return
+
+    rows = get_whitelist_users()
+
+    if not rows:
+        await update.message.reply_text("ℹ️ Whitelist is empty")
+        return
+
+    lines = ["👥 Allowed users:\n"]
+
+    for uid, username, added_at in rows:
+        date = added_at.replace("T", " ")[:16] if added_at else "N/A"
+        name = f"@{username}" if username else "—"
+        lines.append(f"• {uid} | {name} | added: {date}")
+
+    await update.message.reply_text("\n".join(lines))
+
 
 # ================= STATS =================
 
@@ -353,6 +490,7 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(msg)
 
+@whitelist_required
 async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /refuel <liters>")
@@ -415,6 +553,7 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         f"👨🏻‍🦱By: {username}"
     )
 
+@whitelist_required
 async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /reset_fuel <liters>")
@@ -497,10 +636,11 @@ async def monitor(app: Application):
                 remaining_time = format_remaining_time(fuel_now)
                 await send(
                     app,
-                    f"??????ALERT: Low fuel for {GENERATORNAME}??????\n"
-                    f"??Fuel left (est.): {fuel_now:.1f} L\n"
-                    f"?Estimated runtime: {remaining_time}\n"
-                    f"??Threshold: < {LOW_FUEL_HOURS:.2f} h"
+                    f"❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️\n"
+                    f"⚠️ ALERT: Low fuel for {GENERATORNAME}\n"
+                    f"⛽️Fuel left (est.): {fuel_now:.1f} L\n"
+                    f"⏳Estimated runtime: {remaining_time}\n"
+                    f"❗️Threshold: < {LOW_FUEL_HOURS:.2f} h"
                 )
                 set_state("low_fuel_alerted", 1)
 
@@ -631,6 +771,12 @@ def main():
     app.add_handler(CommandHandler("rhistory", refuel_history_cmd))
     app.add_handler(CommandHandler("history", history_cmd))
     app.add_handler(CommandHandler("reset_fuel", reset_fuel_cmd))
+    app.add_handler(CommandHandler("allow", allow_cmd))
+    app.add_handler(CommandHandler("deny", deny_cmd))
+    app.add_handler(CommandHandler("whoami", whoami_cmd))
+    app.add_handler(CommandHandler("users", users_cmd))
+
+
     app.post_init = post_init
     app.run_polling()
 

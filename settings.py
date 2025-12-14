@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
-
+ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 TOKEN = os.getenv("TOKEN")
 CHANNELID = os.getenv("CHANNELID")
 if TOKEN is None:
