@@ -3,7 +3,7 @@ import asyncio
 import datetime as dt
 import sqlite3
 import subprocess
-
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -108,27 +108,77 @@ def remaining_hours_from_fuel(fuel_left: float) -> float:
         return 1e9
     return max(0.0, fuel_left / FUEL_CONSUMPTION)
 
-def get_effective_fuel_left_now() -> float:
+def _parse_iso(dt_str: str | None) -> dt.datetime | None:
+    if not dt_str:
+        return None
+    try:
+        return dt.datetime.fromisoformat(dt_str)
+    except ValueError:
+        return None
+
+
+def get_used_since_start_seconds(now: dt.datetime) -> int:
+    start_dt = _parse_iso(get_state("start_time"))
+    if not start_dt:
+        return 0
+    seconds = int((now - start_dt).total_seconds())
+    if seconds < 0:
+        seconds = 0
+    return seconds
+
+
+def get_fuel_start() -> float | None:
+    val = get_state("fuel_start")
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except ValueError:
+        return None
+
+
+def set_fuel_start(value: float) -> None:
+    set_state("fuel_start", float(value))
+
+
+def get_effective_fuel_left_now(now: dt.datetime | None = None) -> float:
     """
     Returns current fuel estimate.
-    If generator is running, subtract fuel used since start_time (not persisted).
+    - If STOPPED: returns state.fuel_left
+    - If RUNNING: returns max(0, fuel_start - used_since_start)
     """
-    base_fuel = float(get_state("fuel_left", INITIAL_FUEL))
+    if now is None:
+        now = dt.datetime.now()
+
     running = get_state("running", "0") == "1"
-    start_time = get_state("start_time")
+    fuel_left_db = float(get_state("fuel_left", INITIAL_FUEL))
 
-    if not running or not start_time:
-        return base_fuel
+    if not running:
+        return fuel_left_db
 
-    try:
-        start_dt = dt.datetime.fromisoformat(start_time)
-    except ValueError:
-        return base_fuel
+    fuel_start = get_fuel_start()
+    if fuel_start is None:
+        # Migration/repair: if bot restarted while running and fuel_start missing
+        fuel_start = fuel_left_db
+        set_fuel_start(fuel_start)
 
-    elapsed = int((dt.datetime.now() - start_dt).total_seconds())
-    used = fuel_used(elapsed)
-    return max(0.0, base_fuel - used)
+    used = fuel_used(get_used_since_start_seconds(now))
+    return max(0.0, fuel_start - used)
 
+
+def apply_fuel_setpoint_while_running(new_effective_fuel: float, now: dt.datetime | None = None) -> None:
+    """
+    When RUNNING, we want the effective fuel (right now) to become new_effective_fuel.
+    We keep start_time unchanged and adjust fuel_start so that:
+      new_effective = fuel_start_new - used_since_start
+      => fuel_start_new = new_effective + used_since_start
+    """
+    if now is None:
+        now = dt.datetime.now()
+
+    used = fuel_used(get_used_since_start_seconds(now))
+    fuel_start_new = new_effective_fuel + used
+    set_fuel_start(fuel_start_new)
 
 
 # ================ Ref history ============
@@ -243,7 +293,13 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 # ================= TELEGRAM =================
 
 async def send(app: Application, text: str):
-    await app.bot.send_message(chat_id=CHANNELID, text=text)
+    await app.bot.send_message(chat_id=CHANNELID, text=text,reply_markup=bot_link_keyboard())
+
+def bot_link_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔗 Open bot", url=f"https://t.me/gdsfvrwerfvbot")]
+    ])
+
 
 # ================= STATS =================
 
@@ -274,7 +330,8 @@ async def startup_message(app: Application):
 # ================= COMMANDS =================
 
 async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
-    fuel_left = get_effective_fuel_left_now()
+    now = dt.datetime.now()
+    fuel_left = get_effective_fuel_left_now(now)
     remaining_time = format_remaining_time(fuel_left)
     running = get_state("running", "0") == "1"
 
@@ -313,29 +370,40 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     username = user.username or user.full_name
 
-    fuel_before = float(get_state("fuel_left", INITIAL_FUEL))
+    now = dt.datetime.now()
+    running = get_state("running", "0") == "1"
+
+    fuel_before = get_effective_fuel_left_now(now)
     fuel_after = min(TANK_CAPACITY, fuel_before + amount)
 
-    set_state("fuel_left", fuel_after)
+    if running:
+       # Adjust fuel_start so that effective fuel NOW becomes fuel_after
+        apply_fuel_setpoint_while_running(fuel_after, now)
+    else:
+        set_state("fuel_left", fuel_after)
+
+    # allow alert to trigger again after refuel
+    set_state("low_fuel_alerted", 0)
 
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute("""
             INSERT INTO refuel_log (
-                timestamp,
-                amount,
-                fuel_before,
-                fuel_after,
-                user_id,
-                username
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            dt.datetime.now().isoformat(),
-            amount,
-            fuel_before,
-            fuel_after,
-            user_id,
-            username
-        ))
+              timestamp,
+              amount,
+              fuel_before,
+              fuel_after,
+              user_id,
+              username
+           ) VALUES (?, ?, ?, ?, ?, ?)
+      """, (
+        now.isoformat(),
+        amount,
+        fuel_before,
+        fuel_after,
+        user_id,
+        username
+    ))
+
     # allow alert to trigger again after refuel
     set_state("low_fuel_alerted", 0)
 
@@ -370,16 +438,19 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     username = user.username or user.full_name
 
-    fuel_before = float(get_state("fuel_left", INITIAL_FUEL))
-    fuel_after = value
+    now = dt.datetime.now()
+    running = get_state("running", "0") == "1"
 
-    # set fuel directly
-    set_state("fuel_left", fuel_after)
+    fuel_before = get_effective_fuel_left_now(now)
+    fuel_after = value  # already validated <= TANK_CAPACITY
 
-    # reset low fuel alert
+    if running:
+       apply_fuel_setpoint_while_running(fuel_after, now)
+    else:
+        set_state("fuel_left", fuel_after)
+
     set_state("low_fuel_alerted", 0)
 
-    # log reset as a special refuel record
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute("""
             INSERT INTO refuel_log (
@@ -390,14 +461,15 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
                 user_id,
                 username
             ) VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            dt.datetime.now().isoformat(),
-            0.0,                 # amount = 0 → reset
+         """, (
+            now.isoformat(),
+            0.0,  # reset marker
             fuel_before,
             fuel_after,
             user_id,
             f"{username} (reset)"
-        ))
+    ))
+
 
     await update.message.reply_text(
         f"Fuel level RESET\n"
@@ -409,8 +481,6 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 # ================= MONITOR =================
 async def monitor(app: Application):
     running = get_state("running", "0") == "1"
-    start_time = get_state("start_time")
-    fuel_left = float(get_state("fuel_left", INITIAL_FUEL))
 
     while True:
         alive = ping(GENERATORADDR)
@@ -418,7 +488,7 @@ async def monitor(app: Application):
 
         # Low-fuel alert (while running)
         if running:
-            fuel_now = get_effective_fuel_left_now()
+            fuel_now = get_effective_fuel_left_now(now)
             rem_h = remaining_hours_from_fuel(fuel_now)
 
             alerted = get_state("low_fuel_alerted", "0") == "1"
@@ -427,14 +497,13 @@ async def monitor(app: Application):
                 remaining_time = format_remaining_time(fuel_now)
                 await send(
                     app,
-                    f"❗️❗️❗️ALERT: Low fuel for {GENERATORNAME}\n"
-                    f"⛽️Fuel left (est.): {fuel_now:.1f} L\n"
-                    f"⏳Estimated runtime: {remaining_time}\n"
-                    f"❗️Threshold: < {LOW_FUEL_HOURS:.2f} h"
+                    f"??????ALERT: Low fuel for {GENERATORNAME}??????\n"
+                    f"??Fuel left (est.): {fuel_now:.1f} L\n"
+                    f"?Estimated runtime: {remaining_time}\n"
+                    f"??Threshold: < {LOW_FUEL_HOURS:.2f} h"
                 )
                 set_state("low_fuel_alerted", 1)
 
-            # Reset alert flag if refueled above threshold again
             if rem_h >= LOW_FUEL_HOURS:
                 set_state("low_fuel_alerted", 0)
 
@@ -446,8 +515,10 @@ async def monitor(app: Application):
             set_state("running", 1)
             set_state("start_time", start_time)
 
-            # NOTE: use effective fuel for nice message
-            fuel_now = get_effective_fuel_left_now()
+            fuel_left_db = float(get_state("fuel_left", INITIAL_FUEL))
+            set_fuel_start(fuel_left_db)
+
+            fuel_now = get_effective_fuel_left_now(now)
             remaining_time = format_remaining_time(fuel_now)
 
             await send(
@@ -461,19 +532,15 @@ async def monitor(app: Application):
         if (not alive) and running:
             running = False
             stop_time = now
-            start_dt = dt.datetime.fromisoformat(start_time)
 
-            runtime = int((stop_time - start_dt).total_seconds())
-            # Protect against negative runtime (clock skew / corrupted state)
-            if runtime < 0:
-                runtime = 0
+            seconds = get_used_since_start_seconds(now)
+            used = fuel_used(seconds)
 
-            used = fuel_used(runtime)
+            fuel_start = get_fuel_start()
+            if fuel_start is None:
+                fuel_start = float(get_state("fuel_left", INITIAL_FUEL))
 
-            # Re-read fuel from DB to account for refuel during runtime
-            fuel_left = float(get_state("fuel_left", INITIAL_FUEL))
-            fuel_left = max(0.0, fuel_left - used)
-
+            fuel_left = max(0.0, fuel_start - used)
             remaining_time = format_remaining_time(fuel_left)
 
             with sqlite3.connect(DB_FILE) as conn:
@@ -481,41 +548,25 @@ async def monitor(app: Application):
                     INSERT INTO generator_log
                     (start_time, stop_time, runtime_seconds, fuel_used)
                     VALUES (?, ?, ?, ?)
-                """, (start_time, stop_time.isoformat(), runtime, used))
+                """, (
+                    get_state("start_time"),
+                    stop_time.isoformat(),
+                    seconds,
+                    used
+                ))
 
             set_state("running", 0)
             set_state("fuel_left", fuel_left)
+            set_state("fuel_start", None)
 
             await send(
                 app,
                 f"❌{GENERATORNAME} STOPPED\n"
-                f"⏱️Runtime: {runtime // 60} min\n"
+                f"⏱️Runtime: {seconds // 60} min\n"
                 f"⛽️Fuel used: {used:.1f} L\n"
                 f"⛽️Fuel left: {fuel_left:.1f} L\n"
                 f"⏳Estimated runtime: {remaining_time}"
             )
-
-        # DAILY REPORT
-        if (
-            now.hour == REPORTH
-            and now.minute == REPORTM
-            and now.second < INTERVAL
-        ):
-            day_runtime, day_fuel = get_stats(24)
-
-            fuel_now = get_effective_fuel_left_now()
-            remaining_time = format_remaining_time(fuel_now)
-
-            await send(
-                app,
-                f"❕DAILY REPORT: {GENERATORNAME}\n"
-                f"⏱️Runtime: {day_runtime // 3600}h {(day_runtime % 3600)//60}m\n"
-                f"⛽️Fuel used: {day_fuel:.1f} L\n"
-                f"⛽️Fuel left: {fuel_now:.1f} L\n"
-                f"⏳Estimated runtime: {remaining_time}"
-            )
-
-            await asyncio.sleep(60)
 
         await asyncio.sleep(INTERVAL)
 
