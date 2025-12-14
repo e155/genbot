@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  genbot:
+    build: .
+    container_name: generator-bot
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./data:/app/data
+
+    # IMPORTANT: allow ping
+    cap_add:
+      - NET_RAW
+
+    # optional but useful
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

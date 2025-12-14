@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import datetime as dt
 import sqlite3
@@ -463,9 +464,16 @@ async def monitor(app: Application):
             start_dt = dt.datetime.fromisoformat(start_time)
 
             runtime = int((stop_time - start_dt).total_seconds())
+            # Protect against negative runtime (clock skew / corrupted state)
+            if runtime < 0:
+                runtime = 0
+
             used = fuel_used(runtime)
 
+            # Re-read fuel from DB to account for refuel during runtime
+            fuel_left = float(get_state("fuel_left", INITIAL_FUEL))
             fuel_left = max(0.0, fuel_left - used)
+
             remaining_time = format_remaining_time(fuel_left)
 
             with sqlite3.connect(DB_FILE) as conn:
