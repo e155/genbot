@@ -5,6 +5,7 @@ load_dotenv(find_dotenv())
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 TOKEN = os.getenv("TOKEN")
 CHANNELID = os.getenv("CHANNELID")
+BOTURL = os.getenv("BOTURL")
 if TOKEN is None:
     raise Exception("Please setup the .env variable TELEGRAM_TOKEN.")
 

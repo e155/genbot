@@ -23,7 +23,8 @@ from settings import (
     INITIAL_FUEL,
     DB_FILE,
     LOW_FUEL_HOURS,
-    ADMIN_USER_ID
+    ADMIN_USER_ID,
+    BOTURL
 )
 
 # ================= DATABASE =================
@@ -412,7 +413,7 @@ async def send(app: Application, text: str):
 
 def bot_link_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Open bot", url=f"https://t.me/gdsfvrwerfvbot")]
+        [InlineKeyboardButton("🔗 Open bot", url=BOTURL)]
     ])
 
 async def users_cmd(update, context: ContextTypes.DEFAULT_TYPE):
