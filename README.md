@@ -110,7 +110,7 @@ GENERATORADDR=192.168.1.50
 
 #Recomended interval >=30
 INTERVAL=60
-#Daily report time
+#Daily report time (UTC time)
 REPORTH=7
 REPORTM=0
 
