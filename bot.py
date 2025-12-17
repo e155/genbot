@@ -754,10 +754,50 @@ async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
 
+async def daily_report(context: ContextTypes.DEFAULT_TYPE):
+    app = context.application
+    now = dt.datetime.now()
+
+    runtime, fuel_used_24h = get_stats(24)
+
+    fuel_left = get_effective_fuel_left_now(now)
+    remaining_time = format_remaining_time(fuel_left)
+
+    if runtime > 0:
+        msg = (
+            f"📊 DAILY REPORT: {GENERATORNAME}\n\n"
+            f"🗓 Date: {now.strftime('%Y-%m-%d')}\n\n"
+            f"🌀 Generator was RUNNING\n\n"
+            f"⏱ Runtime: {runtime // 3600}h {(runtime % 3600) // 60}m\n"
+            f"⛽ Fuel used: {fuel_used_24h:.1f} L\n\n"
+            f"⛽ Fuel left: {fuel_left:.1f} L\n"
+            f"⏳ Estimated runtime: {remaining_time}"
+        )
+    else:
+        msg = (
+            f"📊 DAILY REPORT: {GENERATORNAME}\n\n"
+            f"🗓 Date: {now.strftime('%Y-%m-%d')}\n\n"
+            f"❌ Generator was NOT running in last 24h\n\n"
+            f"⛽ Fuel left: {fuel_left:.1f} L\n"
+            f"⏳ Estimated runtime: {remaining_time}"
+        )
+
+    await send(app, msg)
+
+
+
 # ================= MAIN ==================
 async def post_init(app: Application):
     await startup_message(app)
+    # monitor loop
     app.create_task(monitor(app))
+
+    # daily report
+    app.job_queue.run_daily(
+        daily_report,
+        time=dt.time(hour=REPORTH, minute=REPORTM),
+        name="daily_report"
+    )
 
 
 def main():
