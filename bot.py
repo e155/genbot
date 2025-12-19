@@ -168,6 +168,17 @@ def _apply_setting_value(key: str, value, context: ContextTypes.DEFAULT_TYPE):
 
     os.environ[key] = str(value)
 
+    if key == "INTERVAL":
+        job_queue = context.application.job_queue
+        for job in job_queue.get_jobs_by_name("monitor"):
+            job.schedule_removal()
+        job_queue.run_repeating(
+            monitor_job,
+            interval=INTERVAL,
+            first=0,
+            name="monitor"
+        )
+
     if key in {"REPORTH", "REPORTM"}:
         job_queue = context.application.job_queue
         for job in job_queue.get_jobs_by_name("daily_report"):
@@ -847,105 +858,100 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ================= MONITOR =================
-async def monitor(app: Application):
+async def monitor_job(context: ContextTypes.DEFAULT_TYPE):
     running = get_state("running", "0") == "1"
+    alive = ping(GENERATORADDR)
+    now = dt.datetime.now()
 
-    while True:
-        alive = ping(GENERATORADDR)
-        now = dt.datetime.now()
+    # Low-fuel alert (while running)
+    if running:
+        fuel_now = get_effective_fuel_left_now(now)
+        rem_h = remaining_hours_from_fuel(fuel_now)
 
-        # Low-fuel alert (while running)
-        if running:
-            fuel_now = get_effective_fuel_left_now(now)
-            rem_h = remaining_hours_from_fuel(fuel_now)
+        alerted = get_state("low_fuel_alerted", "0") == "1"
 
-            alerted = get_state("low_fuel_alerted", "0") == "1"
-
-            if (rem_h < LOW_FUEL_HOURS) and (not alerted):
-                remaining_time = format_remaining_time(fuel_now)
-                await send(
-                    app,
-                    t(
-                        "low_fuel_alert",
-                        generator=GENERATORNAME,
-                        fuel_left=fuel_now,
-                        remaining_time=remaining_time,
-                        threshold=LOW_FUEL_HOURS,
-                    )
-                )
-                set_state("low_fuel_alerted", 1)
-
-            if rem_h >= LOW_FUEL_HOURS:
-                set_state("low_fuel_alerted", 0)
-
-        # START
-        if alive and not running:
-            running = True
-            start_time = now.isoformat()
-
-            set_state("running", 1)
-            set_state("start_time", start_time)
-
-            fuel_left_db = float(get_state("fuel_left", INITIAL_FUEL))
-            set_fuel_start(fuel_left_db)
-
-            fuel_now = get_effective_fuel_left_now(now)
+        if (rem_h < LOW_FUEL_HOURS) and (not alerted):
             remaining_time = format_remaining_time(fuel_now)
-
             await send(
-                app,
+                context.application,
                 t(
-                    "generator_started",
+                    "low_fuel_alert",
                     generator=GENERATORNAME,
                     fuel_left=fuel_now,
                     remaining_time=remaining_time,
+                    threshold=LOW_FUEL_HOURS,
                 )
             )
+            set_state("low_fuel_alerted", 1)
 
-        # STOP
-        if (not alive) and running:
-            running = False
-            stop_time = now
+        if rem_h >= LOW_FUEL_HOURS:
+            set_state("low_fuel_alerted", 0)
 
-            seconds = get_used_since_start_seconds(now)
-            used = fuel_used(seconds)
+    # START
+    if alive and not running:
+        running = True
+        start_time = now.isoformat()
 
-            fuel_start = get_fuel_start()
-            if fuel_start is None:
-                fuel_start = float(get_state("fuel_left", INITIAL_FUEL))
+        set_state("running", 1)
+        set_state("start_time", start_time)
 
-            fuel_left = max(0.0, fuel_start - used)
-            remaining_time = format_remaining_time(fuel_left)
+        fuel_left_db = float(get_state("fuel_left", INITIAL_FUEL))
+        set_fuel_start(fuel_left_db)
 
-            with sqlite3.connect(DB_FILE) as conn:
-                conn.execute("""
-                    INSERT INTO generator_log
-                    (start_time, stop_time, runtime_seconds, fuel_used)
-                    VALUES (?, ?, ?, ?)
-                """, (
-                    get_state("start_time"),
-                    stop_time.isoformat(),
-                    seconds,
-                    used
-                ))
+        fuel_now = get_effective_fuel_left_now(now)
+        remaining_time = format_remaining_time(fuel_now)
 
-            set_state("running", 0)
-            set_state("fuel_left", fuel_left)
-            set_state("fuel_start", None)
-
-            await send(
-                app,
-                t(
-                    "generator_stopped",
-                    generator=GENERATORNAME,
-                    runtime_minutes=seconds // 60,
-                    fuel_used=used,
-                    fuel_left=fuel_left,
-                    remaining_time=remaining_time,
-                )
+        await send(
+            context.application,
+            t(
+                "generator_started",
+                generator=GENERATORNAME,
+                fuel_left=fuel_now,
+                remaining_time=remaining_time,
             )
+        )
 
-        await asyncio.sleep(INTERVAL)
+    # STOP
+    if (not alive) and running:
+        stop_time = now
+
+        seconds = get_used_since_start_seconds(now)
+        used = fuel_used(seconds)
+
+        fuel_start = get_fuel_start()
+        if fuel_start is None:
+            fuel_start = float(get_state("fuel_left", INITIAL_FUEL))
+
+        fuel_left = max(0.0, fuel_start - used)
+        remaining_time = format_remaining_time(fuel_left)
+
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("""
+                INSERT INTO generator_log
+                (start_time, stop_time, runtime_seconds, fuel_used)
+                VALUES (?, ?, ?, ?)
+            """, (
+                get_state("start_time"),
+                stop_time.isoformat(),
+                seconds,
+                used
+            ))
+
+        set_state("running", 0)
+        set_state("fuel_left", fuel_left)
+        set_state("fuel_start", None)
+
+        await send(
+            context.application,
+            t(
+                "generator_stopped",
+                generator=GENERATORNAME,
+                runtime_minutes=seconds // 60,
+                fuel_used=used,
+                fuel_left=fuel_left,
+                remaining_time=remaining_time,
+            )
+        )
 
 
 # ================== HELP =================
@@ -999,7 +1005,12 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
 async def post_init(app: Application):
     await startup_message(app)
     # monitor loop
-    app.create_task(monitor(app))
+    app.job_queue.run_repeating(
+        monitor_job,
+        interval=INTERVAL,
+        first=0,
+        name="monitor"
+    )
 
     # daily report
     app.job_queue.run_daily(
