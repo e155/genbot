@@ -23,7 +23,7 @@ MESSAGES = {
         "history_usage": "Usage: /history [days]\nExample: /history 7",
         "history_empty": "No generator activity for last {days} day(s).",
         "history_header": "Generator history (last {days} day(s)):",
-        "history_line": "{start} -> {stop}\n  Runtime: {hours}h {minutes}m\n  Fuel used: {fuel:.1f} L",
+        "history_line": "{start} -> {stop}\n  ⏱️Runtime: {hours}h {minutes}m\n  ⛽️🔽 Fuel used: {fuel:.1f} L",
         "open_bot_button": "Open bot",
         "whitelist_empty": "Whitelist is empty.",
         "whitelist_header": "Allowed users:",
@@ -31,19 +31,19 @@ MESSAGES = {
         "unknown_user": "N/A",
         "not_available": "N/A",
         "bot_restarted": "Generator bot restarted\nTime: {time}",
-        "state_running": "RUNNING",
-        "state_stopped": "STOPPED",
+        "state_running": "🌀RUNNING",
+        "state_stopped": "❌STOPPED",
         "status": (
-            "STATUS: {generator}\n\n"
+            "❕STATUS: {generator}\n\n"
             "State: {state}\n"
-            "Fuel left: {fuel_left:.1f} L\n\n"
-            "Estimated runtime: {remaining_time}\n\n"
+            "⛽️Fuel left: {fuel_left:.1f} L\n\n"
+            "⏳Estimated runtime: {remaining_time}\n\n"
             "Last 24h:\n"
-            "  Runtime: {day_hours}h {day_minutes}m\n"
-            "  Fuel used: {day_fuel:.1f} L\n\n"
+            "  ⏱️Runtime: {day_hours}h {day_minutes}m\n"
+            "  ⛽️🔽 Fuel used: {day_fuel:.1f} L\n\n"
             "Last 7 days:\n"
-            "  Runtime: {week_hours}h {week_minutes}m\n"
-            "  Fuel used: {week_fuel:.1f} L"
+            "  ⏱️Runtime: {week_hours}h {week_minutes}m\n"
+            "  ⛽️🔽 Fuel used: {week_fuel:.1f} L"
         ),
         "refuel_usage": "Usage: /refuel <liters>",
         "refuel_invalid_amount": "Invalid fuel amount.",
@@ -63,21 +63,21 @@ MESSAGES = {
         ),
         "low_fuel_alert": (
             "[ALERT] Low fuel for {generator}\n"
-            "Fuel left (est.): {fuel_left:.1f} L\n"
-            "Estimated runtime: {remaining_time}\n"
+            "⛽️Fuel left (est.): {fuel_left:.1f} L\n"
+            "⏳Estimated runtime: {remaining_time}\n"
             "Threshold: < {threshold:.2f} h"
         ),
         "generator_started": (
             "{generator} STARTED\n"
-            "Fuel left: {fuel_left:.1f} L\n"
-            "Estimated runtime: {remaining_time}"
+            "⛽️Fuel left: {fuel_left:.1f} L\n"
+            "⏳Estimated runtime: {remaining_time}"
         ),
         "generator_stopped": (
             "{generator} STOPPED\n"
-            "Runtime: {runtime_minutes} min\n"
-            "Fuel used: {fuel_used:.1f} L\n"
-            "Fuel left: {fuel_left:.1f} L\n"
-            "Estimated runtime: {remaining_time}"
+            "⏱️Runtime: {runtime_minutes} min\n"
+            "⛽️🔽 Fuel used: {fuel_used:.1f} L\n"
+            "⛽️Fuel left: {fuel_left:.1f} L\n"
+            "⏳Estimated runtime: {remaining_time}"
         ),
         "help": (
             "Generator monitoring bot\n\n"
@@ -106,17 +106,17 @@ MESSAGES = {
             "DAILY REPORT: {generator}\n\n"
             "Date: {date}\n\n"
             "Generator was RUNNING\n\n"
-            "Runtime: {runtime_hours}h {runtime_minutes}m\n"
-            "Fuel used: {fuel_used:.1f} L\n\n"
-            "Fuel left: {fuel_left:.1f} L\n"
-            "Estimated runtime: {remaining_time}"
+            "⏱️Runtime: {runtime_hours}h {runtime_minutes}m\n"
+            "⛽️🔽 Fuel used: {fuel_used:.1f} L\n\n"
+            "⛽️Fuel left: {fuel_left:.1f} L\n"
+            "⏳Estimated runtime: {remaining_time}"
         ),
         "daily_report_idle": (
             "DAILY REPORT: {generator}\n\n"
             "Date: {date}\n\n"
             "Generator was NOT running in last 24h\n\n"
-            "Fuel left: {fuel_left:.1f} L\n"
-            "Estimated runtime: {remaining_time}"
+            "⛽️Fuel left: {fuel_left:.1f} L\n"
+            "⏳Estimated runtime: {remaining_time}"
         ),
     },
     "ru": {
@@ -139,7 +139,7 @@ MESSAGES = {
         "history_usage": "Использование: /history [days]\nПример: /history 7",
         "history_empty": "Генератор не работал последние {days} дн.",
         "history_header": "История генератора (последние {days} дн.):",
-        "history_line": "{start} -> {stop}\n  Время работы: {hours}ч {minutes}м\n  Топлива израсходовано: {fuel:.1f} л",
+        "history_line": "{start} -> {stop}\n  ⏱️Время работы: {hours}ч {minutes}м\n  ⛽️🔽 Топлива израсходовано: {fuel:.1f} л",
         "open_bot_button": "Открыть бота",
         "whitelist_empty": "Белый список пуст.",
         "whitelist_header": "Разрешенные пользователи:",
@@ -147,19 +147,19 @@ MESSAGES = {
         "unknown_user": "не задан",
         "not_available": "н/д",
         "bot_restarted": "Бот генератора перезапущен\nВремя: {time}",
-        "state_running": "РАБОТАЕТ",
-        "state_stopped": "ОСТАНОВЛЕН",
+        "state_running": "🌀РАБОТАЕТ",
+        "state_stopped": "❌ОСТАНОВЛЕН",
         "status": (
-            "СТАТУС: {generator}\n\n"
+            "❕СТАТУС: {generator}\n\n"
             "Состояние: {state}\n"
-            "Топлива осталось: {fuel_left:.1f} л\n\n"
-            "Оценка работы: {remaining_time}\n\n"
+            "⛽️Топлива осталось: {fuel_left:.1f} л\n\n"
+            "⏳Оценка работы: {remaining_time}\n\n"
             "Последние 24 часа:\n"
-            "  Время работы: {day_hours}ч {day_minutes}м\n"
-            "  Расход: {day_fuel:.1f} л\n\n"
+            "  ⏱️Время работы: {day_hours}ч {day_minutes}м\n"
+            "  ⛽️🔽 Расход: {day_fuel:.1f} л\n\n"
             "Последние 7 дней:\n"
-            "  Время работы: {week_hours}ч {week_minutes}м\n"
-            "  Расход: {week_fuel:.1f} л"
+            "  ⏱️Время работы: {week_hours}ч {week_minutes}м\n"
+            "  ⛽️🔽 Расход: {week_fuel:.1f} л"
         ),
         "refuel_usage": "Использование: /refuel <liters>",
         "refuel_invalid_amount": "Некорректное количество топлива.",
@@ -179,21 +179,21 @@ MESSAGES = {
         ),
         "low_fuel_alert": (
             "[ALERT] Низкий уровень топлива для {generator}\n"
-            "Остаток (оценка): {fuel_left:.1f} л\n"
-            "Оставшееся время: {remaining_time}\n"
+            "⛽️Остаток (оценка): {fuel_left:.1f} л\n"
+            "⏳Оставшееся время: {remaining_time}\n"
             "Порог: < {threshold:.2f} ч"
         ),
         "generator_started": (
             "{generator} ЗАПУЩЕН\n"
-            "Топлива: {fuel_left:.1f} л\n"
-            "Оставшееся время: {remaining_time}"
+            "⛽️Топлива: {fuel_left:.1f} л\n"
+            "⏳Оставшееся время: {remaining_time}"
         ),
         "generator_stopped": (
             "{generator} ОСТАНОВЛЕН\n"
-            "Время работы: {runtime_minutes} мин\n"
-            "Расход: {fuel_used:.1f} л\n"
-            "Остаток: {fuel_left:.1f} л\n"
-            "Оставшееся время: {remaining_time}"
+            "⏱️Время работы: {runtime_minutes} мин\n"
+            "⛽️🔽 Расход: {fuel_used:.1f} л\n"
+            "⛽️Остаток: {fuel_left:.1f} л\n"
+            "⏳Оставшееся время: {remaining_time}"
         ),
         "help": (
             "Бот мониторинга генератора\n\n"
@@ -222,17 +222,17 @@ MESSAGES = {
             "ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"
             "Дата: {date}\n\n"
             "Генератор работал\n\n"
-            "Время работы: {runtime_hours}ч {runtime_minutes}м\n"
-            "Расход: {fuel_used:.1f} л\n\n"
-            "Остаток: {fuel_left:.1f} л\n"
-            "Оставшееся время: {remaining_time}"
+            "⏱️Время работы: {runtime_hours}ч {runtime_minutes}м\n"
+            "⛽️🔽 Расход: {fuel_used:.1f} л\n\n"
+            "⛽️Остаток: {fuel_left:.1f} л\n"
+            "⏳Оставшееся время: {remaining_time}"
         ),
         "daily_report_idle": (
             "ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"
             "Дата: {date}\n\n"
             "Генератор не работал за последние 24ч\n\n"
-            "Остаток: {fuel_left:.1f} л\n"
-            "Оставшееся время: {remaining_time}"
+            "⛽️Остаток: {fuel_left:.1f} л\n"
+            "⏳Оставшееся время: {remaining_time}"
         ),
     },
 }
