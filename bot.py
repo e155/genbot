@@ -27,6 +27,8 @@ from settings import (
     BOTURL
 )
 
+from localization import t
+
 # ================= DATABASE =================
 
 def init_db():
@@ -103,10 +105,7 @@ def whitelist_required(handler):
             return
 
         if not is_user_allowed(user.id):
-            await update.message.reply_text(
-                "⛔ Access denied.\n"
-                "You are not authorized to use this bot."
-            )
+            await update.message.reply_text(t("access_denied"))
             return
 
         return await handler(update, context)
@@ -128,51 +127,53 @@ async def allow_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     if user.id != ADMIN_USER_ID:
-        await update.message.reply_text("⛔ Admin only")
+        await update.message.reply_text(t("admin_only"))
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: /allow <user_id>")
+        await update.message.reply_text(t("usage_allow"))
         return
 
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text("Invalid user_id")
+        await update.message.reply_text(t("invalid_user_id"))
         return
 
     add_user_to_whitelist(uid, None)
-    await update.message.reply_text(f"✅ User {uid} added to whitelist")
+    await update.message.reply_text(t("allow_added", user_id=uid))
 
 #===deny id ====
 async def deny_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     if user.id != ADMIN_USER_ID:
-        await update.message.reply_text("⛔ Admin only")
+        await update.message.reply_text(t("admin_only"))
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: /deny <user_id>")
+        await update.message.reply_text(t("usage_deny"))
         return
 
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text("Invalid user_id")
+        await update.message.reply_text(t("invalid_user_id"))
         return
 
     remove_user_from_whitelist(uid)
-    await update.message.reply_text(f"❌ User {uid} removed from whitelist")
+    await update.message.reply_text(t("deny_removed", user_id=uid))
 
 #===my id ====
 
 async def whoami_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    username_line = f"\nUsername: @{user.username}" if user.username else ""
+    username_line = (
+        t("username_line", username=user.username) if user.username else ""
+    )
     await update.message.reply_text(
-        f"👤 Your ID: {user.id}{username_line}"
-            )
+        t("whoami", user_id=user.id, username_line=username_line)
+    )
 
 
 def get_state(key, default=None):
@@ -300,7 +301,7 @@ def apply_fuel_setpoint_while_running(new_effective_fuel: float, now: dt.datetim
 # ================ Ref history ============
 async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /rhistory <days>")
+        await update.message.reply_text(t("refuel_history_usage"))
         return
 
     try:
@@ -308,7 +309,7 @@ async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         if days <= 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("Invalid number of days")
+        await update.message.reply_text(t("refuel_history_invalid_days"))
         return
 
     with sqlite3.connect(DB_FILE) as conn:
@@ -329,23 +330,30 @@ async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     if not rows:
         await update.message.reply_text(
-            f"No refuel records for last {days} days"
+            t("refuel_history_empty", days=days)
         )
         return
 
-    lines = [f"Refuel history (last {days} days):\n"]
+    lines = [t("refuel_history_header", days=days)]
 
     for ts, amount, before, after, user in rows:
         time_str = ts.replace("T", " ")[:16]
-        if amount > 0:
-            action = f"+{amount:.1f} L"
-        else:
-            action = "RESET"
+        action = (
+            t("refuel_history_action_add", amount=amount)
+            if amount > 0
+            else t("refuel_history_action_reset")
+        )
 
         lines.append(
-            f"{time_str} | {action} | "
-            f"{before:.1f} → {after:.1f} | {user}"
-)
+            t(
+                "refuel_history_line",
+                time=time_str,
+                action=action,
+                before=before,
+                after=after,
+                user=user or t("unknown_user"),
+            )
+        )
 
 
     await update.message.reply_text("\n".join(lines))
@@ -362,9 +370,7 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
             if days <= 0:
                 raise ValueError
         except ValueError:
-            await update.message.reply_text(
-                "Usage: /history [days]\nExample: /history 7"
-            )
+            await update.message.reply_text(t("history_usage"))
             return
 
     with sqlite3.connect(DB_FILE) as conn:
@@ -384,23 +390,28 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     if not rows:
         await update.message.reply_text(
-            f"❕No generator activity for last {days} day(s)"
+            t("history_empty", days=days)
         )
         return
 
-    lines = [f"❕Generator history (last {days} day(s)):\n"]
+    lines = [t("history_header", days=days)]
 
     for start, stop, runtime, fuel in rows:
         start_s = start.replace("T", " ")[:16]
-        stop_s = stop.replace("T", " ")[:16] if stop else "N/A"
+        stop_s = stop.replace("T", " ")[:16] if stop else t("not_available")
 
         hours = runtime // 3600
         minutes = (runtime % 3600) // 60
 
         lines.append(
-            f"{start_s} → {stop_s}\n"
-            f"  Runtime: {hours}h {minutes}m\n"
-            f"  Fuel used: {fuel:.1f} L"
+            t(
+                "history_line",
+                start=start_s,
+                stop=stop_s,
+                hours=hours,
+                minutes=minutes,
+                fuel=fuel,
+            )
         )
 
     await update.message.reply_text("\n".join(lines))
@@ -409,32 +420,36 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 # ================= TELEGRAM =================
 
 async def send(app: Application, text: str):
-    await app.bot.send_message(chat_id=CHANNELID, text=text,reply_markup=bot_link_keyboard())
+    await app.bot.send_message(
+        chat_id=CHANNELID,
+        text=text,
+        reply_markup=bot_link_keyboard()
+    )
 
 def bot_link_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Open bot", url=BOTURL)]
+        [InlineKeyboardButton(t("open_bot_button"), url=BOTURL)]
     ])
 
 async def users_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     if user.id != ADMIN_USER_ID:
-        await update.message.reply_text("⛔ Admin only")
+        await update.message.reply_text(t("admin_only"))
         return
 
     rows = get_whitelist_users()
 
     if not rows:
-        await update.message.reply_text("ℹ️ Whitelist is empty")
+        await update.message.reply_text(t("whitelist_empty"))
         return
 
-    lines = ["👥 Allowed users:\n"]
+    lines = [t("whitelist_header")]
 
     for uid, username, added_at in rows:
-        date = added_at.replace("T", " ")[:16] if added_at else "N/A"
-        name = f"@{username}" if username else "—"
-        lines.append(f"• {uid} | {name} | added: {date}")
+        date = added_at.replace("T", " ")[:16] if added_at else t("not_available")
+        name = f"@{username}" if username else t("unknown_user")
+        lines.append(t("whitelist_line", user_id=uid, username=name, added_at=date))
 
     await update.message.reply_text("\n".join(lines))
 
@@ -458,10 +473,7 @@ async def startup_message(app: Application):
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     await app.bot.send_message(
         chat_id=CHANNELID,
-        text=(
-            "❗️Generator bot restarted\n"
-            f"Time: {now}"
-        )
+        text=t("bot_restarted", time=now)
     )
 
 
@@ -476,17 +488,20 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     day_runtime, day_fuel = get_stats(24)
     week_runtime, week_fuel = get_stats(24 * 7)
 
-    msg = (
-        f"❕STATUS: {GENERATORNAME}\n\n"
-        f"State: {'🌀RUNNING' if running else '❌STOPPED'}\n"
-        f"⛽️Fuel left: {fuel_left:.1f} L\n\n"
-        f"⏳Estimated runtime: {remaining_time}\n\n"
-        f"Last 24h:\n"
-        f"⏱️  Runtime: {day_runtime // 3600}h {(day_runtime % 3600) // 60}m\n"
-        f"⛽️🔽 Fuel used: {day_fuel:.1f} L\n\n"
-        f"Last 7 days:\n"
-        f"⏱️  Runtime: {week_runtime // 3600}h {(week_runtime % 3600) // 60}m\n"
-        f"⛽️🔽 Fuel used: {week_fuel:.1f} L"
+    state_label = t("state_running") if running else t("state_stopped")
+
+    msg = t(
+        "status",
+        generator=GENERATORNAME,
+        state=state_label,
+        fuel_left=fuel_left,
+        remaining_time=remaining_time,
+        day_hours=day_runtime // 3600,
+        day_minutes=(day_runtime % 3600) // 60,
+        day_fuel=day_fuel,
+        week_hours=week_runtime // 3600,
+        week_minutes=(week_runtime % 3600) // 60,
+        week_fuel=week_fuel,
     )
 
     await update.message.reply_text(msg)
@@ -494,7 +509,7 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 @whitelist_required
 async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /refuel <liters>")
+        await update.message.reply_text(t("refuel_usage"))
         return
 
     try:
@@ -502,7 +517,7 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         if amount <= 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("Invalid fuel amount")
+        await update.message.reply_text(t("refuel_invalid_amount"))
         return
 
     user = update.effective_user
@@ -548,16 +563,19 @@ async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
 
     await update.message.reply_text(
-        f"❕Refuel recorded\n"
-        f"🔄Added: {amount:.1f} L\n"
-        f"⛽️Fuel level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
-        f"👨🏻‍🦱By: {username}"
+        t(
+            "refuel_saved",
+            amount=amount,
+            fuel_after=fuel_after,
+            capacity=TANK_CAPACITY,
+            user=username,
+        )
     )
 
 @whitelist_required
 async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /reset_fuel <liters>")
+        await update.message.reply_text(t("reset_usage"))
         return
 
     try:
@@ -565,12 +583,12 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         if value < 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("Invalid fuel value")
+        await update.message.reply_text(t("reset_invalid"))
         return
 
     if value > TANK_CAPACITY:
         await update.message.reply_text(
-            f"Fuel value exceeds tank capacity ({TANK_CAPACITY:.1f} L)"
+            t("reset_overflow", capacity=TANK_CAPACITY)
         )
         return
 
@@ -612,10 +630,13 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
 
     await update.message.reply_text(
-        f"Fuel level RESET\n"
-        f"⛽️New level: {fuel_after:.1f} / {TANK_CAPACITY:.1f} L\n"
-        f"👨🏻‍🦱By: {username}"
-            )
+        t(
+            "reset_done",
+            fuel_after=fuel_after,
+            capacity=TANK_CAPACITY,
+            user=username,
+        )
+    )
 
 
 # ================= MONITOR =================
@@ -637,11 +658,13 @@ async def monitor(app: Application):
                 remaining_time = format_remaining_time(fuel_now)
                 await send(
                     app,
-                    f"❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️\n"
-                    f"⚠️ ALERT: Low fuel for {GENERATORNAME}\n"
-                    f"⛽️Fuel left (est.): {fuel_now:.1f} L\n"
-                    f"⏳Estimated runtime: {remaining_time}\n"
-                    f"❗️Threshold: < {LOW_FUEL_HOURS:.2f} h"
+                    t(
+                        "low_fuel_alert",
+                        generator=GENERATORNAME,
+                        fuel_left=fuel_now,
+                        remaining_time=remaining_time,
+                        threshold=LOW_FUEL_HOURS,
+                    )
                 )
                 set_state("low_fuel_alerted", 1)
 
@@ -664,9 +687,12 @@ async def monitor(app: Application):
 
             await send(
                 app,
-                f"🌀{GENERATORNAME} STARTED\n"
-                f"⛽️Fuel left: {fuel_now:.1f} L\n"
-                f"⏳Estimated runtime: {remaining_time}"
+                t(
+                    "generator_started",
+                    generator=GENERATORNAME,
+                    fuel_left=fuel_now,
+                    remaining_time=remaining_time,
+                )
             )
 
         # STOP
@@ -702,11 +728,14 @@ async def monitor(app: Application):
 
             await send(
                 app,
-                f"❌{GENERATORNAME} STOPPED\n"
-                f"⏱️Runtime: {seconds // 60} min\n"
-                f"⛽️Fuel used: {used:.1f} L\n"
-                f"⛽️Fuel left: {fuel_left:.1f} L\n"
-                f"⏳Estimated runtime: {remaining_time}"
+                t(
+                    "generator_stopped",
+                    generator=GENERATORNAME,
+                    runtime_minutes=seconds // 60,
+                    fuel_used=used,
+                    fuel_left=fuel_left,
+                    remaining_time=remaining_time,
+                )
             )
 
         await asyncio.sleep(INTERVAL)
@@ -715,35 +744,7 @@ async def monitor(app: Application):
 # ================== HELP =================
 
 
-HELP_TEXT = (
-    "Generator monitoring bot\n\n"
-    "Available commands:\n\n"
-
-    "/status\n"
-    "  Show current generator status\n"
-    "  Fuel level and estimated remaining runtime\n"
-    "  Statistics for last 24 hours and last 7 days\n\n"
-
-    "/history [days]\n"
-    "  Generator start/stop history and fuel usage\n"
-    "  Default: 1 day\n"
-    "  Example: /history 7\n\n"
-
-    "/refuel <liters>\n"
-    "  Add fuel to the tank\n"
-    "  Example: /refuel 50\n\n"
-
-    "/rhistory <days>\n"
-    "  Refuel/reset history\n"
-    "  Example: /rhistory 7\n\n"
-
-    "/reset_fuel <liters>\n"
-    "  Force set current fuel level\n"
-    "  Example: /reset_fuel 190\n\n"
-
-    "/help\n"
-    "  Show this help message"
-)
+HELP_TEXT = t("help")
 
 
 async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
@@ -764,22 +765,23 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
     remaining_time = format_remaining_time(fuel_left)
 
     if runtime > 0:
-        msg = (
-            f"📊 DAILY REPORT: {GENERATORNAME}\n\n"
-            f"🗓 Date: {now.strftime('%Y-%m-%d')}\n\n"
-            f"🌀 Generator was RUNNING\n\n"
-            f"⏱ Runtime: {runtime // 3600}h {(runtime % 3600) // 60}m\n"
-            f"⛽ Fuel used: {fuel_used_24h:.1f} L\n\n"
-            f"⛽ Fuel left: {fuel_left:.1f} L\n"
-            f"⏳ Estimated runtime: {remaining_time}"
+        msg = t(
+            "daily_report_running",
+            generator=GENERATORNAME,
+            date=now.strftime("%Y-%m-%d"),
+            runtime_hours=runtime // 3600,
+            runtime_minutes=(runtime % 3600) // 60,
+            fuel_used=fuel_used_24h,
+            fuel_left=fuel_left,
+            remaining_time=remaining_time,
         )
     else:
-        msg = (
-            f"📊 DAILY REPORT: {GENERATORNAME}\n\n"
-            f"🗓 Date: {now.strftime('%Y-%m-%d')}\n\n"
-            f"❌ Generator was NOT running in last 24h\n\n"
-            f"⛽ Fuel left: {fuel_left:.1f} L\n"
-            f"⏳ Estimated runtime: {remaining_time}"
+        msg = t(
+            "daily_report_idle",
+            generator=GENERATORNAME,
+            date=now.strftime("%Y-%m-%d"),
+            fuel_left=fuel_left,
+            remaining_time=remaining_time,
         )
 
     await send(app, msg)
