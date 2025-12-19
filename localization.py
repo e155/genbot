@@ -4,33 +4,33 @@ DEFAULT_LANGUAGE = os.getenv("LANGUAGE", "en").lower()
 
 MESSAGES = {
     "en": {
-        "access_denied": "Access denied.\nYou are not authorized to use this bot.",
-        "admin_only": "Admin only.",
-        "usage_allow": "Usage: /allow <user_id>",
-        "usage_deny": "Usage: /deny <user_id>",
-        "invalid_user_id": "Invalid user_id.",
-        "allow_added": "User {user_id} added to whitelist.",
-        "deny_removed": "User {user_id} removed from whitelist.",
-        "whoami": "Your ID: {user_id}{username_line}",
-        "username_line": "\nUsername: @{username}",
-        "refuel_history_usage": "Usage: /rhistory <days>",
-        "refuel_history_invalid_days": "Invalid number of days.",
-        "refuel_history_empty": "No refuel records for last {days} days.",
-        "refuel_history_header": "Refuel history (last {days} days):",
+        "access_denied": "❗️Access denied.\nYou are not authorized to use this bot.",
+        "admin_only": "❗️Admin only.",
+        "usage_allow": "❕Usage: /allow <user_id>",
+        "usage_deny": "❕Usage: /deny <user_id>",
+        "invalid_user_id": "❕Invalid user_id.",
+        "allow_added": "❕User {user_id} added to whitelist.",
+        "deny_removed": "❕User {user_id} removed from whitelist.",
+        "whoami": "❕Your ID: {user_id}{username_line}",
+        "username_line": "\n❕Username: @{username}",
+        "refuel_history_usage": "❕Usage: /rhistory <days>",
+        "refuel_history_invalid_days": "❕Invalid number of days.",
+        "refuel_history_empty": "❕No refuel records for last {days} days.",
+        "refuel_history_header": "❕Refuel history (last {days} days):",
         "refuel_history_line": "{time} | {action} | {before:.1f} -> {after:.1f} | {user}",
         "refuel_history_action_add": "+{amount:.1f} L",
-        "refuel_history_action_reset": "RESET",
-        "history_usage": "Usage: /history [days]\nExample: /history 7",
-        "history_empty": "No generator activity for last {days} day(s).",
-        "history_header": "Generator history (last {days} day(s)):",
+        "refuel_history_action_reset": "❕RESET",
+        "history_usage": "❕Usage: /history [days]\nExample: /history 7",
+        "history_empty": "❕No generator activity for last {days} day(s).",
+        "history_header": "❕Generator history (last {days} day(s)):",
         "history_line": "{start} -> {stop}\n  ⏱️Runtime: {hours}h {minutes}m\n  ⛽️🔽 Fuel used: {fuel:.1f} L",
         "open_bot_button": "Open bot",
-        "whitelist_empty": "Whitelist is empty.",
-        "whitelist_header": "Allowed users:",
-        "whitelist_line": "{user_id} | {username} | added: {added_at}",
+        "whitelist_empty": "❕Whitelist is empty.",
+        "whitelist_header": "❕Allowed users:",
+        "whitelist_line": "❕{user_id} | {username} | added: {added_at}",
         "unknown_user": "N/A",
         "not_available": "N/A",
-        "bot_restarted": "Generator bot restarted\nTime: {time}",
+        "bot_restarted": "❕Generator bot restarted\nTime: {time}",
         "state_running": "🌀RUNNING",
         "state_stopped": "❌STOPPED",
         "status": (
@@ -45,27 +45,28 @@ MESSAGES = {
             "  ⏱️Runtime: {week_hours}h {week_minutes}m\n"
             "  ⛽️🔽 Fuel used: {week_fuel:.1f} L"
         ),
-        "refuel_usage": "Usage: /refuel <liters>",
-        "refuel_invalid_amount": "Invalid fuel amount.",
+        "refuel_usage": "❕Usage: /refuel <liters>",
+        "refuel_invalid_amount": "❕Invalid fuel amount.",
         "refuel_saved": (
-            "Refuel recorded\n"
-            "Added: {amount:.1f} L\n"
-            "Fuel level: {fuel_after:.1f} / {capacity:.1f} L\n"
-            "By: {user}"
+            "❕Refuel recorded\n"
+            "🔄Added: {amount:.1f} L\n"
+            "⛽️Fuel level: {fuel_after:.1f} / {capacity:.1f} L\n"
+            "👨🏻‍🦱By: {user}"
         ),
-        "reset_usage": "Usage: /reset_fuel <liters>",
-        "reset_invalid": "Invalid fuel value.",
-        "reset_overflow": "Fuel value exceeds tank capacity ({capacity:.1f} L).",
+        "reset_usage": "❕Usage: /reset_fuel <liters>",
+        "reset_invalid": "❕Invalid fuel value.",
+        "reset_overflow": "❕Fuel value exceeds tank capacity ({capacity:.1f} L).",
         "reset_done": (
-            "Fuel level RESET\n"
-            "New level: {fuel_after:.1f} / {capacity:.1f} L\n"
-            "By: {user}"
+            "❕Fuel level RESET\n"
+            "🔄New level: {fuel_after:.1f} / {capacity:.1f} L\n"
+            "👨🏻‍🦱By: {user}"
         ),
         "low_fuel_alert": (
+            "❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️\n"
             "[ALERT] Low fuel for {generator}\n"
             "⛽️Fuel left (est.): {fuel_left:.1f} L\n"
             "⏳Estimated runtime: {remaining_time}\n"
-            "Threshold: < {threshold:.2f} h"
+            "⚠️Threshold: < {threshold:.2f} h"
         ),
         "generator_started": (
             "{generator} STARTED\n"
@@ -103,46 +104,46 @@ MESSAGES = {
             "  Show this help message"
         ),
         "daily_report_running": (
-            "DAILY REPORT: {generator}\n\n"
-            "Date: {date}\n\n"
-            "Generator was RUNNING\n\n"
+            "📊DAILY REPORT: {generator}\n\n"
+            "🗓Date: {date}\n\n"
+            "⚡️Generator was RUNNING\n\n"
             "⏱️Runtime: {runtime_hours}h {runtime_minutes}m\n"
             "⛽️🔽 Fuel used: {fuel_used:.1f} L\n\n"
             "⛽️Fuel left: {fuel_left:.1f} L\n"
             "⏳Estimated runtime: {remaining_time}"
         ),
         "daily_report_idle": (
-            "DAILY REPORT: {generator}\n\n"
-            "Date: {date}\n\n"
-            "Generator was NOT running in last 24h\n\n"
+            "📊 DAILY REPORT: {generator}\n\n"
+            "🗓Date: {date}\n\n"
+            "💤Generator was NOT running in last 24h\n\n"
             "⛽️Fuel left: {fuel_left:.1f} L\n"
             "⏳Estimated runtime: {remaining_time}"
         ),
     },
     "ru": {
-        "access_denied": "Доступ запрещен.\nУ вас нет прав для использования этого бота.",
-        "admin_only": "Только администратор.",
-        "usage_allow": "Использование: /allow <user_id>",
-        "usage_deny": "Использование: /deny <user_id>",
-        "invalid_user_id": "Некорректный user_id.",
-        "allow_added": "Пользователь {user_id} добавлен в белый список.",
-        "deny_removed": "Пользователь {user_id} удален из белого списка.",
-        "whoami": "Ваш ID: {user_id}{username_line}",
+        "access_denied": "❗️Доступ запрещен.\nУ вас нет прав для использования этого бота.",
+        "admin_only": "❗️Только администратор.",
+        "usage_allow": "❕Использование: /allow <user_id>",
+        "usage_deny": "❕Использование: /deny <user_id>",
+        "invalid_user_id": "❕Некорректный user_id.",
+        "allow_added": "❕Пользователь {user_id} добавлен в белый список.",
+        "deny_removed": "❕Пользователь {user_id} удален из белого списка.",
+        "whoami": "❕Ваш ID: {user_id}{username_line}",
         "username_line": "\nИмя пользователя: @{username}",
-        "refuel_history_usage": "Использование: /rhistory <days>",
-        "refuel_history_invalid_days": "Некорректное число дней.",
-        "refuel_history_empty": "Заправок за последние {days} дн. нет.",
-        "refuel_history_header": "История заправок (последние {days} дн.):",
+        "refuel_history_usage": "❕Использование: /rhistory <days>",
+        "refuel_history_invalid_days": "❕Некорректное число дней.",
+        "refuel_history_empty": "❕Заправок за последние {days} дн. нет.",
+        "refuel_history_header": "❕История заправок (последние {days} дн.):",
         "refuel_history_line": "{time} | {action} | {before:.1f} -> {after:.1f} | {user}",
         "refuel_history_action_add": "+{amount:.1f} л",
-        "refuel_history_action_reset": "СБРОС",
-        "history_usage": "Использование: /history [days]\nПример: /history 7",
-        "history_empty": "Генератор не работал последние {days} дн.",
-        "history_header": "История генератора (последние {days} дн.):",
+        "refuel_history_action_reset": "❕СБРОС",
+        "history_usage": "❕Использование: /history [days]\nПример: /history 7",
+        "history_empty": "❕Генератор не работал последние {days} дн.",
+        "history_header": "❕История генератора (последние {days} дн.):",
         "history_line": "{start} -> {stop}\n  ⏱️Время работы: {hours}ч {minutes}м\n  ⛽️🔽 Топлива израсходовано: {fuel:.1f} л",
         "open_bot_button": "Открыть бота",
-        "whitelist_empty": "Белый список пуст.",
-        "whitelist_header": "Разрешенные пользователи:",
+        "whitelist_empty": "❕Белый список пуст.",
+        "whitelist_header": "❕Разрешенные пользователи:",
         "whitelist_line": "{user_id} | {username} | добавлен: {added_at}",
         "unknown_user": "не задан",
         "not_available": "н/д",
@@ -161,27 +162,28 @@ MESSAGES = {
             "  ⏱️Время работы: {week_hours}ч {week_minutes}м\n"
             "  ⛽️🔽 Расход: {week_fuel:.1f} л"
         ),
-        "refuel_usage": "Использование: /refuel <liters>",
-        "refuel_invalid_amount": "Некорректное количество топлива.",
+        "refuel_usage": "❕Использование: /refuel <liters>",
+        "refuel_invalid_amount": "❕Некорректное количество топлива.",
         "refuel_saved": (
-            "Заправка сохранена\n"
-            "Добавлено: {amount:.1f} л\n"
-            "Уровень: {fuel_after:.1f} / {capacity:.1f} л\n"
-            "Пользователь: {user}"
+            "❕Заправка сохранена\n"
+            "🔄Добавлено: {amount:.1f} л\n"
+            "⛽️Топлива в баке: {fuel_after:.1f} / {capacity:.1f} л\n"
+            "👨🏻‍🦱Внесено: {user}"
         ),
-        "reset_usage": "Использование: /reset_fuel <liters>",
-        "reset_invalid": "Некорректное значение топлива.",
-        "reset_overflow": "Значение топлива превышает объем бака ({capacity:.1f} л).",
+        "reset_usage": "❕Использование: /reset_fuel <liters>",
+        "reset_invalid": "❕Некорректное значение топлива.",
+        "reset_overflow": "❕Значение топлива превышает объем бака ({capacity:.1f} л).",
         "reset_done": (
-            "Уровень топлива сброшен\n"
-            "Новый уровень: {fuel_after:.1f} / {capacity:.1f} л\n"
-            "Пользователь: {user}"
+            "❕Уровень топлива сброшен\n"
+            "🔄Новый уровень: {fuel_after:.1f} / {capacity:.1f} л\n"
+            "👨🏻‍🦱Внесено: {user}"
         ),
         "low_fuel_alert": (
+            "❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️\n"
             "[ALERT] Низкий уровень топлива для {generator}\n"
             "⛽️Остаток (оценка): {fuel_left:.1f} л\n"
             "⏳Оставшееся время: {remaining_time}\n"
-            "Порог: < {threshold:.2f} ч"
+            "⚠️Порог: < {threshold:.2f} ч"
         ),
         "generator_started": (
             "{generator} ЗАПУЩЕН\n"
@@ -219,18 +221,18 @@ MESSAGES = {
             "  Показать это сообщение"
         ),
         "daily_report_running": (
-            "ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"
-            "Дата: {date}\n\n"
-            "Генератор работал\n\n"
+            "📊ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"
+            "🗓Дата: {date}\n\n"
+            "⚡️Генератор работал\n\n"
             "⏱️Время работы: {runtime_hours}ч {runtime_minutes}м\n"
             "⛽️🔽 Расход: {fuel_used:.1f} л\n\n"
             "⛽️Остаток: {fuel_left:.1f} л\n"
             "⏳Оставшееся время: {remaining_time}"
         ),
         "daily_report_idle": (
-            "ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"
-            "Дата: {date}\n\n"
-            "Генератор не работал за последние 24ч\n\n"
+            "📊ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"
+            "🗓Дата: {date}\n\n"
+            "💤Генератор не работал за последние 24ч\n\n"
             "⛽️Остаток: {fuel_left:.1f} л\n"
             "⏳Оставшееся время: {remaining_time}"
         ),
