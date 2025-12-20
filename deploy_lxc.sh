@@ -93,7 +93,7 @@ select_storage() {
   fi
 
   if [ "${#storages[@]}" -gt 0 ]; then
-    echo "Available storages:"
+    echo "Available storages (content=rootdir):"
     local i=1
     for s in "${storages[@]}"; do
       echo "  [$i] $s"
@@ -102,9 +102,12 @@ select_storage() {
     local choice
     while true; do
       if [ -r /dev/tty ]; then
-        read -r -p "Select storage [1-${#storages[@]}]: " choice </dev/tty
+        read -r -p "Select storage [1-${#storages[@]}] (default 1): " choice </dev/tty
       else
-        read -r -p "Select storage [1-${#storages[@]}]: " choice
+        read -r -p "Select storage [1-${#storages[@]}] (default 1): " choice
+      fi
+      if [ -z "$choice" ]; then
+        choice=1
       fi
       if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#storages[@]}" ]; then
         STORAGE="${storages[$((choice - 1))]}"
