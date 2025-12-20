@@ -133,6 +133,26 @@ rm -f "$ENV_TMP"
 pct exec "$CTID" -- bash -lc "cd /opt/genbot && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt"
 
 msg_info "Installing systemd service..."
-pct exec "$CTID" -- bash -lc "cat > /etc/systemd/system/genbot.service <<'UNIT'\n[Unit]\nDescription=Genbot\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nWorkingDirectory=/opt/genbot\nExecStart=/opt/genbot/.venv/bin/python /opt/genbot/bot.py\nRestart=always\nRestartSec=5\nEnvironment=PYTHONUNBUFFERED=1\n\n[Install]\nWantedBy=multi-user.target\nUNIT\nsystemctl daemon-reload && systemctl enable --now genbot.service"
+SERVICE_TMP="$(mktemp -t genbot.service.XXXXXX)"
+cat > "$SERVICE_TMP" <<'UNIT'
+[Unit]
+Description=Genbot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/genbot
+ExecStart=/opt/genbot/.venv/bin/python /opt/genbot/bot.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+pct push "$CTID" "$SERVICE_TMP" /etc/systemd/system/genbot.service
+rm -f "$SERVICE_TMP"
+pct exec "$CTID" -- bash -lc "systemctl daemon-reload && systemctl enable --now genbot.service"
 
 msg_ok "Done. Container $CTID is running genbot."
