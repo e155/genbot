@@ -3,42 +3,19 @@ set -euo pipefail
 
 APP="genbot"
 
-RD="\033[01;31m"
-GN="\033[1;92m"
-YW="\033[1;93m"
-BL="\033[1;36m"
-CL="\033[m"
+if command -v curl >/dev/null 2>&1; then
+  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+elif command -v wget >/dev/null 2>&1; then
+  source <(wget -qO- https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+else
+  echo "curl or wget not found. Run this on the Proxmox host." >&2
+  exit 1
+fi
 
-INFO="${BL}[INFO]${CL}"
-OK="${GN}[OK]${CL}"
-ERR="${RD}[ERROR]${CL}"
-
-header_info() {
-  clear || true
-  echo -e "${BL}== ${APP} Proxmox LXC Deployment ==${CL}"
-  echo ""
-}
-
-msg_info() {
-  echo -e "${INFO} $*"
-}
-
-msg_ok() {
-  echo -e "${OK} $*"
-}
-
-msg_error() {
-  echo -e "${ERR} $*" >&2
-}
-
-check_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    msg_error "$1 not found. Run this on the Proxmox host."
-    exit 1
-  fi
-}
-
-check_cmd pct
+if ! command -v pct >/dev/null 2>&1; then
+  msg_error "pct not found. Run this on the Proxmox host."
+  exit 1
+fi
 
 prompt() {
   local var_name="$1"
@@ -129,7 +106,10 @@ select_storage() {
   fi
 }
 
-header_info
+header_info "$APP"
+variables
+color
+catch_errors
 
 STORAGE=""
 
