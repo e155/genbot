@@ -1,10 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v pct >/dev/null 2>&1; then
-  echo "pct not found. Run this on the Proxmox host." >&2
-  exit 1
-fi
+APP="genbot"
+
+RD="\033[01;31m"
+GN="\033[1;92m"
+YW="\033[1;93m"
+BL="\033[1;36m"
+CL="\033[m"
+
+INFO="${BL}[INFO]${CL}"
+OK="${GN}[OK]${CL}"
+ERR="${RD}[ERROR]${CL}"
+
+header_info() {
+  clear || true
+  echo -e "${BL}== ${APP} Proxmox LXC Deployment ==${CL}"
+  echo ""
+}
+
+msg_info() {
+  echo -e "${INFO} $*"
+}
+
+msg_ok() {
+  echo -e "${OK} $*"
+}
+
+msg_error() {
+  echo -e "${ERR} $*" >&2
+}
+
+check_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    msg_error "$1 not found. Run this on the Proxmox host."
+    exit 1
+  fi
+}
+
+check_cmd pct
 
 prompt() {
   local var_name="$1"
@@ -67,7 +101,11 @@ select_storage() {
     done
     local choice
     while true; do
-      read -r -p "Select storage [1-${#storages[@]}]: " choice
+      if [ -r /dev/tty ]; then
+        read -r -p "Select storage [1-${#storages[@]}]: " choice </dev/tty
+      else
+        read -r -p "Select storage [1-${#storages[@]}]: " choice
+      fi
       if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#storages[@]}" ]; then
         STORAGE="${storages[$((choice - 1))]}"
         break
@@ -80,7 +118,7 @@ select_storage() {
   fi
 }
 
-echo "== Proxmox LXC deployment for genbot =="
+header_info
 
 STORAGE=""
 
@@ -98,7 +136,7 @@ prompt SWAP "Swap MB" "512"
 prompt UNPRIV "Unprivileged (1/0)" "1"
 
 echo ""
-echo "== .env values =="
+msg_info "Enter .env values"
 prompt LANGUAGE "LANGUAGE (en/ru)" "ru"
 prompt_secret TOKEN "TOKEN"
 prompt CHANNELID "CHANNELID"
@@ -124,7 +162,7 @@ else
   NET_CONF="name=eth0,bridge=${BRIDGE},ip=dhcp"
 fi
 
-echo "Creating container..."
+msg_info "Creating container..."
 pct create "$CTID" "$TEMPLATE" \
   --hostname "$HOSTNAME" \
   --storage "$STORAGE" \
@@ -134,17 +172,17 @@ pct create "$CTID" "$TEMPLATE" \
   --net0 "$NET_CONF" \
   --unprivileged "$UNPRIV"
 
-echo "Starting container..."
+msg_info "Starting container..."
 pct start "$CTID"
 
-echo "Uploading project..."
+msg_info "Uploading project..."
 WORKDIR="$(pwd)"
 TMP_TAR="$(mktemp -t genbot.XXXXXX.tar.gz)"
 tar --exclude .git --exclude .venv --exclude __pycache__ --exclude generator.db -czf "$TMP_TAR" -C "$WORKDIR" .
 pct push "$CTID" "$TMP_TAR" /root/genbot.tar.gz
 rm -f "$TMP_TAR"
 
-echo "Configuring container..."
+msg_info "Configuring container..."
 pct exec "$CTID" -- bash -lc "apt-get update && apt-get install -y python3-venv python3-pip && mkdir -p /opt/genbot && tar -xzf /root/genbot.tar.gz -C /opt/genbot && rm -f /root/genbot.tar.gz"
 
 ENV_TMP="$(mktemp -t genbot.env.XXXXXX)"
@@ -172,7 +210,7 @@ rm -f "$ENV_TMP"
 
 pct exec "$CTID" -- bash -lc "cd /opt/genbot && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt"
 
-echo "Installing systemd service..."
+msg_info "Installing systemd service..."
 pct exec "$CTID" -- bash -lc "cat > /etc/systemd/system/genbot.service <<'UNIT'\n[Unit]\nDescription=Genbot\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nWorkingDirectory=/opt/genbot\nExecStart=/opt/genbot/.venv/bin/python /opt/genbot/bot.py\nRestart=always\nRestartSec=5\nEnvironment=PYTHONUNBUFFERED=1\n\n[Install]\nWantedBy=multi-user.target\nUNIT\nsystemctl daemon-reload && systemctl enable --now genbot.service"
 
-echo "Done. Container $CTID is running genbot."
+msg_ok "Done. Container $CTID is running genbot."
