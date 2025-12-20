@@ -38,12 +38,42 @@ env_quote() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+select_storage() {
+  local storages=()
+  if command -v pvesm >/dev/null 2>&1; then
+    while IFS= read -r line; do
+      storages+=("$line")
+    done < <(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1}')
+  fi
+
+  if [ "${#storages[@]}" -gt 0 ]; then
+    echo "Available storages:"
+    local i=1
+    for s in "${storages[@]}"; do
+      echo "  [$i] $s"
+      i=$((i + 1))
+    done
+    local choice
+    while true; do
+      read -r -p "Select storage [1-${#storages[@]}]: " choice
+      if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#storages[@]}" ]; then
+        STORAGE="${storages[$((choice - 1))]}"
+        break
+      fi
+      echo "Invalid choice. Try again."
+    done
+  else
+    prompt STORAGE "Storage name" "local-lvm"
+    STORAGE="${STORAGE:-local-lvm}"
+  fi
+}
+
 echo "== Proxmox LXC deployment for genbot =="
 
 prompt CTID "Container ID"
 prompt HOSTNAME "Hostname" "genbot"
 prompt TEMPLATE "Ubuntu 24.04 template path (e.g. local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst)"
-prompt STORAGE "Storage name" "local-lvm"
+select_storage
 prompt BRIDGE "Network bridge" "vmbr0"
 prompt NET_MODE "Network mode (dhcp/static)" "dhcp"
 NET_MODE="${NET_MODE:-dhcp}"
