@@ -6,6 +6,13 @@ MESSAGES = {
     "en": {
         "access_denied": "❗️Access denied.\nYou are not authorized to use this bot.",
         "admin_only": "❗️Admin only.",
+        "settings_header": "Settings:",
+        "settings_line": "{setting_key}={value}",
+        "settings_usage": "Usage: /set <KEY> <VALUE>\nKeys: {keys}",
+        "settings_invalid_key": "Invalid key. Keys: {keys}",
+        "settings_invalid_value": "Invalid value for {setting_key}.",
+        "settings_updated": "{setting_key} updated to {value}.",
+        "settings_env_missing": "Warning: .env not updated; change applies only to this run.",
         "usage_allow": "❕Usage: /allow <user_id>",
         "usage_deny": "❕Usage: /deny <user_id>",
         "invalid_user_id": "❕Invalid user_id.",
@@ -101,7 +108,18 @@ MESSAGES = {
             "  Force set current fuel level\n"
             "  Example: /reset_fuel 190\n\n"
             "/help\n"
-            "  Show this help message"
+            "  Show this help message\n\n"
+            "Admin only:\n"
+            "/allow <user_id>\n"
+            "  Add user to whitelist\n"
+            "/deny <user_id>\n"
+            "  Remove user from whitelist\n"
+            "/users\n"
+            "  List whitelist users\n"
+            "/settings\n"
+            "  Show current settings\n"
+            "/set <KEY> <VALUE>\n"
+            "  Update setting in .env and runtime"
         ),
         "daily_report_running": (
             "📊DAILY REPORT: {generator}\n\n"
@@ -123,6 +141,13 @@ MESSAGES = {
     "ru": {
         "access_denied": "❗️Доступ запрещен.\nУ вас нет прав для использования этого бота.",
         "admin_only": "❗️Только администратор.",
+        "settings_header": "Настройки:",
+        "settings_line": "{setting_key}={value}",
+        "settings_usage": "Использование: /set <KEY> <VALUE>\nКлючи: {keys}",
+        "settings_invalid_key": "Неверный ключ. Ключи: {keys}",
+        "settings_invalid_value": "Неверное значение для {setting_key}.",
+        "settings_updated": "{setting_key} обновлен на {value}.",
+        "settings_env_missing": "Предупреждение: .env не обновлен; изменение действует только до перезапуска.",
         "usage_allow": "❕Использование: /allow <user_id>",
         "usage_deny": "❕Использование: /deny <user_id>",
         "invalid_user_id": "❕Некорректный user_id.",
@@ -218,7 +243,18 @@ MESSAGES = {
             "  Принудительно установить уровень топлива\n"
             "  Пример: /reset_fuel 190\n\n"
             "/help\n"
-            "  Показать это сообщение"
+            "  Показать это сообщение\n\n"
+            "Только для админа:\n"
+            "/allow <user_id>\n"
+            "  Добавить в белый список\n"
+            "/deny <user_id>\n"
+            "  Убрать из белого списка\n"
+            "/users\n"
+            "  Список белого списка\n"
+            "/settings\n"
+            "  Просмотр текущих настроек\n"
+            "/set <KEY> <VALUE>\n"
+            "  Изменить настройку в .env и в памяти"
         ),
         "daily_report_running": (
             "📊ЕЖЕДНЕВНЫЙ ОТЧЕТ: {generator}\n\n"

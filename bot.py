@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime as dt
+import os
+import re
 import sqlite3
 import subprocess
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -27,7 +29,165 @@ from settings import (
     BOTURL
 )
 
+import localization as localization_module
 from localization import t
+
+SETTINGS_ORDER = [
+    "LANGUAGE",
+    "GENERATORNAME",
+    "GENERATORADDR",
+    "INTERVAL",
+    "REPORTH",
+    "REPORTM",
+    "TANK_CAPACITY",
+    "FUEL_CONSUMPTION",
+    "LOW_FUEL_HOURS",
+]
+
+SETTINGS_STR_KEYS = {"LANGUAGE", "GENERATORNAME", "GENERATORADDR"}
+SETTINGS_INT_KEYS = {"INTERVAL", "REPORTH", "REPORTM", "TANK_CAPACITY"}
+SETTINGS_FLOAT_KEYS = {"FUEL_CONSUMPTION", "LOW_FUEL_HOURS"}
+
+
+def _format_env_value(key: str, value) -> str:
+    if key in SETTINGS_STR_KEYS:
+        value_str = str(value)
+        escaped = value_str.replace("\\", "\\\\").replace('"', "\\\"")
+        return f"\"{escaped}\""
+    return str(value)
+
+
+def _update_env_file(key: str, value_str: str) -> bool:
+    env_path = ".env"
+    if not os.path.exists(env_path):
+        return False
+
+    pattern = re.compile(rf"^\s*{re.escape(key)}\s*=")
+    with open(env_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    replaced = False
+    for i, line in enumerate(lines):
+        if pattern.match(line):
+            lines[i] = f"{key}={value_str}\n"
+            replaced = True
+
+    if not replaced:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] = lines[-1] + "\n"
+        lines.append(f"{key}={value_str}\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+    return True
+
+
+def _get_setting_value(key: str):
+    if key == "LANGUAGE":
+        return localization_module.DEFAULT_LANGUAGE
+    if key == "GENERATORNAME":
+        return GENERATORNAME
+    if key == "GENERATORADDR":
+        return GENERATORADDR
+    if key == "INTERVAL":
+        return INTERVAL
+    if key == "REPORTH":
+        return REPORTH
+    if key == "REPORTM":
+        return REPORTM
+    if key == "TANK_CAPACITY":
+        return TANK_CAPACITY
+    if key == "FUEL_CONSUMPTION":
+        return FUEL_CONSUMPTION
+    if key == "LOW_FUEL_HOURS":
+        return LOW_FUEL_HOURS
+    return None
+
+
+def _parse_setting_value(key: str, raw_value: str):
+    value = raw_value.strip()
+    if key == "LANGUAGE":
+        lang = value.lower()
+        if lang not in {"en", "ru"}:
+            return None
+        return lang
+    if key in SETTINGS_STR_KEYS:
+        return value
+    if key in SETTINGS_INT_KEYS:
+        try:
+            val = int(value)
+        except ValueError:
+            return None
+        if key == "INTERVAL" and val <= 0:
+            return None
+        if key == "TANK_CAPACITY" and val <= 0:
+            return None
+        if key == "REPORTH" and not (0 <= val <= 23):
+            return None
+        if key == "REPORTM" and not (0 <= val <= 59):
+            return None
+        return val
+    if key in SETTINGS_FLOAT_KEYS:
+        try:
+            val = float(value)
+        except ValueError:
+            return None
+        if key == "FUEL_CONSUMPTION" and val <= 0:
+            return None
+        if key == "LOW_FUEL_HOURS" and val < 0:
+            return None
+        return val
+    return None
+
+
+def _apply_setting_value(key: str, value, context: ContextTypes.DEFAULT_TYPE):
+    global GENERATORNAME, GENERATORADDR, INTERVAL, REPORTH, REPORTM
+    global TANK_CAPACITY, FUEL_CONSUMPTION, LOW_FUEL_HOURS
+    global HELP_TEXT
+
+    if key == "LANGUAGE":
+        localization_module.DEFAULT_LANGUAGE = str(value).lower()
+        HELP_TEXT = t("help")
+    elif key == "GENERATORNAME":
+        GENERATORNAME = str(value)
+    elif key == "GENERATORADDR":
+        GENERATORADDR = str(value)
+    elif key == "INTERVAL":
+        INTERVAL = int(value)
+    elif key == "REPORTH":
+        REPORTH = int(value)
+    elif key == "REPORTM":
+        REPORTM = int(value)
+    elif key == "TANK_CAPACITY":
+        TANK_CAPACITY = int(value)
+    elif key == "FUEL_CONSUMPTION":
+        FUEL_CONSUMPTION = float(value)
+    elif key == "LOW_FUEL_HOURS":
+        LOW_FUEL_HOURS = float(value)
+
+    os.environ[key] = str(value)
+
+    if key == "INTERVAL":
+        job_queue = context.application.job_queue
+        for job in job_queue.get_jobs_by_name("monitor"):
+            job.schedule_removal()
+        job_queue.run_repeating(
+            monitor_job,
+            interval=INTERVAL,
+            first=0,
+            name="monitor"
+        )
+
+    if key in {"REPORTH", "REPORTM"}:
+        job_queue = context.application.job_queue
+        for job in job_queue.get_jobs_by_name("daily_report"):
+            job.schedule_removal()
+        job_queue.run_daily(
+            daily_report,
+            time=dt.time(hour=REPORTH, minute=REPORTM),
+            name="daily_report"
+        )
 
 # ================= DATABASE =================
 
@@ -454,6 +614,64 @@ async def users_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines))
 
 
+async def settings_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text(t("admin_only"))
+        return
+
+    lines = [t("settings_header")]
+
+    for key in SETTINGS_ORDER:
+        value = _get_setting_value(key)
+        lines.append(t("settings_line", setting_key=key, value=value))
+
+    await update.message.reply_text("\n".join(lines))
+
+
+async def set_setting_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text(t("admin_only"))
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            t("settings_usage", keys=", ".join(SETTINGS_ORDER))
+        )
+        return
+
+    key = context.args[0].upper()
+    if key not in SETTINGS_ORDER:
+        await update.message.reply_text(
+            t("settings_invalid_key", keys=", ".join(SETTINGS_ORDER))
+        )
+        return
+
+    raw_value = " ".join(context.args[1:]).strip()
+    parsed = _parse_setting_value(key, raw_value)
+    if parsed is None:
+        await update.message.reply_text(
+            t("settings_invalid_value", setting_key=key)
+        )
+        return
+
+    _apply_setting_value(key, parsed, context)
+
+    try:
+        env_value = _format_env_value(key, parsed)
+        updated = _update_env_file(key, env_value)
+    except Exception:
+        updated = False
+
+    message = t("settings_updated", setting_key=key, value=parsed)
+    if not updated:
+        message = f"{message}\n{t('settings_env_missing')}"
+    await update.message.reply_text(message)
+
+
 # ================= STATS =================
 
 def get_stats(hours: int):
@@ -640,105 +858,100 @@ async def reset_fuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ================= MONITOR =================
-async def monitor(app: Application):
+async def monitor_job(context: ContextTypes.DEFAULT_TYPE):
     running = get_state("running", "0") == "1"
+    alive = ping(GENERATORADDR)
+    now = dt.datetime.now()
 
-    while True:
-        alive = ping(GENERATORADDR)
-        now = dt.datetime.now()
+    # Low-fuel alert (while running)
+    if running:
+        fuel_now = get_effective_fuel_left_now(now)
+        rem_h = remaining_hours_from_fuel(fuel_now)
 
-        # Low-fuel alert (while running)
-        if running:
-            fuel_now = get_effective_fuel_left_now(now)
-            rem_h = remaining_hours_from_fuel(fuel_now)
+        alerted = get_state("low_fuel_alerted", "0") == "1"
 
-            alerted = get_state("low_fuel_alerted", "0") == "1"
-
-            if (rem_h < LOW_FUEL_HOURS) and (not alerted):
-                remaining_time = format_remaining_time(fuel_now)
-                await send(
-                    app,
-                    t(
-                        "low_fuel_alert",
-                        generator=GENERATORNAME,
-                        fuel_left=fuel_now,
-                        remaining_time=remaining_time,
-                        threshold=LOW_FUEL_HOURS,
-                    )
-                )
-                set_state("low_fuel_alerted", 1)
-
-            if rem_h >= LOW_FUEL_HOURS:
-                set_state("low_fuel_alerted", 0)
-
-        # START
-        if alive and not running:
-            running = True
-            start_time = now.isoformat()
-
-            set_state("running", 1)
-            set_state("start_time", start_time)
-
-            fuel_left_db = float(get_state("fuel_left", INITIAL_FUEL))
-            set_fuel_start(fuel_left_db)
-
-            fuel_now = get_effective_fuel_left_now(now)
+        if (rem_h < LOW_FUEL_HOURS) and (not alerted):
             remaining_time = format_remaining_time(fuel_now)
-
             await send(
-                app,
+                context.application,
                 t(
-                    "generator_started",
+                    "low_fuel_alert",
                     generator=GENERATORNAME,
                     fuel_left=fuel_now,
                     remaining_time=remaining_time,
+                    threshold=LOW_FUEL_HOURS,
                 )
             )
+            set_state("low_fuel_alerted", 1)
 
-        # STOP
-        if (not alive) and running:
-            running = False
-            stop_time = now
+        if rem_h >= LOW_FUEL_HOURS:
+            set_state("low_fuel_alerted", 0)
 
-            seconds = get_used_since_start_seconds(now)
-            used = fuel_used(seconds)
+    # START
+    if alive and not running:
+        running = True
+        start_time = now.isoformat()
 
-            fuel_start = get_fuel_start()
-            if fuel_start is None:
-                fuel_start = float(get_state("fuel_left", INITIAL_FUEL))
+        set_state("running", 1)
+        set_state("start_time", start_time)
 
-            fuel_left = max(0.0, fuel_start - used)
-            remaining_time = format_remaining_time(fuel_left)
+        fuel_left_db = float(get_state("fuel_left", INITIAL_FUEL))
+        set_fuel_start(fuel_left_db)
 
-            with sqlite3.connect(DB_FILE) as conn:
-                conn.execute("""
-                    INSERT INTO generator_log
-                    (start_time, stop_time, runtime_seconds, fuel_used)
-                    VALUES (?, ?, ?, ?)
-                """, (
-                    get_state("start_time"),
-                    stop_time.isoformat(),
-                    seconds,
-                    used
-                ))
+        fuel_now = get_effective_fuel_left_now(now)
+        remaining_time = format_remaining_time(fuel_now)
 
-            set_state("running", 0)
-            set_state("fuel_left", fuel_left)
-            set_state("fuel_start", None)
-
-            await send(
-                app,
-                t(
-                    "generator_stopped",
-                    generator=GENERATORNAME,
-                    runtime_minutes=seconds // 60,
-                    fuel_used=used,
-                    fuel_left=fuel_left,
-                    remaining_time=remaining_time,
-                )
+        await send(
+            context.application,
+            t(
+                "generator_started",
+                generator=GENERATORNAME,
+                fuel_left=fuel_now,
+                remaining_time=remaining_time,
             )
+        )
 
-        await asyncio.sleep(INTERVAL)
+    # STOP
+    if (not alive) and running:
+        stop_time = now
+
+        seconds = get_used_since_start_seconds(now)
+        used = fuel_used(seconds)
+
+        fuel_start = get_fuel_start()
+        if fuel_start is None:
+            fuel_start = float(get_state("fuel_left", INITIAL_FUEL))
+
+        fuel_left = max(0.0, fuel_start - used)
+        remaining_time = format_remaining_time(fuel_left)
+
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("""
+                INSERT INTO generator_log
+                (start_time, stop_time, runtime_seconds, fuel_used)
+                VALUES (?, ?, ?, ?)
+            """, (
+                get_state("start_time"),
+                stop_time.isoformat(),
+                seconds,
+                used
+            ))
+
+        set_state("running", 0)
+        set_state("fuel_left", fuel_left)
+        set_state("fuel_start", None)
+
+        await send(
+            context.application,
+            t(
+                "generator_stopped",
+                generator=GENERATORNAME,
+                runtime_minutes=seconds // 60,
+                fuel_used=used,
+                fuel_left=fuel_left,
+                remaining_time=remaining_time,
+            )
+        )
 
 
 # ================== HELP =================
@@ -792,7 +1005,12 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
 async def post_init(app: Application):
     await startup_message(app)
     # monitor loop
-    app.create_task(monitor(app))
+    app.job_queue.run_repeating(
+        monitor_job,
+        interval=INTERVAL,
+        first=0,
+        name="monitor"
+    )
 
     # daily report
     app.job_queue.run_daily(
@@ -818,6 +1036,8 @@ def main():
     app.add_handler(CommandHandler("deny", deny_cmd))
     app.add_handler(CommandHandler("whoami", whoami_cmd))
     app.add_handler(CommandHandler("users", users_cmd))
+    app.add_handler(CommandHandler("settings", settings_cmd))
+    app.add_handler(CommandHandler("set", set_setting_cmd))
 
 
     app.post_init = post_init
