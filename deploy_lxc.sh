@@ -3,8 +3,8 @@ set -euo pipefail
 
 APP="genbot"
 var_cpu=1
-var_ram=1024
-var_disk=8
+var_ram=256
+var_disk=4
 var_os="ubuntu"
 var_version="24.04"
 var_unprivileged=1
@@ -72,6 +72,7 @@ header_info "$APP"
 variables
 color
 catch_errors
+DIAGNOSTICS="no"
 type maxkeys_check >/dev/null 2>&1 && maxkeys_check
 type pve_check >/dev/null 2>&1 && pve_check
 type arch_check >/dev/null 2>&1 && arch_check
