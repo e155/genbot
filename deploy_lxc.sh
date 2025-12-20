@@ -84,13 +84,21 @@ env_quote() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-select_storage() {
-  local storages=()
+get_rootdir_storages() {
+  local result=()
   if command -v pvesm >/dev/null 2>&1; then
     while IFS= read -r line; do
-      storages+=("$line")
+      result+=("$line")
     done < <(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1}')
   fi
+  printf '%s\n' "${result[@]}"
+}
+
+select_storage() {
+  local storages=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && storages+=("$line")
+  done < <(get_rootdir_storages)
 
   if [ "${#storages[@]}" -gt 0 ]; then
     echo "Available storages (content=rootdir):"
@@ -166,6 +174,16 @@ else
 fi
 
 msg_info "Creating container..."
+available_storages=()
+while IFS= read -r line; do
+  [ -n "$line" ] && available_storages+=("$line")
+done < <(get_rootdir_storages)
+if [ "${#available_storages[@]}" -gt 0 ]; then
+  if ! printf '%s\n' "${available_storages[@]}" | grep -qx "$STORAGE"; then
+    msg_error "Storage '$STORAGE' is not available for rootdir. Using '${available_storages[0]}'."
+    STORAGE="${available_storages[0]}"
+  fi
+fi
 pct create "$CTID" "$TEMPLATE" \
   --hostname "$HOSTNAME" \
   --storage "$STORAGE" \
