@@ -2,6 +2,13 @@
 set -euo pipefail
 
 APP="genbot"
+var_cpu=1
+var_ram=1024
+var_disk=8
+var_os="ubuntu"
+var_version="24.04"
+var_unprivileged=1
+var_net="dhcp"
 
 if command -v curl >/dev/null 2>&1; then
   source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
@@ -61,73 +68,27 @@ env_quote() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-get_rootdir_storages() {
-  local result=()
-  if command -v pvesm >/dev/null 2>&1; then
-    while IFS= read -r line; do
-      result+=("$line")
-    done < <(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1}')
-  fi
-  printf '%s\n' "${result[@]}"
-}
-
-select_storage() {
-  local storages=()
-  while IFS= read -r line; do
-    [ -n "$line" ] && storages+=("$line")
-  done < <(get_rootdir_storages)
-
-  if [ "${#storages[@]}" -gt 0 ]; then
-    echo "Available storages (content=rootdir):"
-    local i=1
-    for s in "${storages[@]}"; do
-      echo "  [$i] $s"
-      i=$((i + 1))
-    done
-    local choice
-    while true; do
-      if [ -r /dev/tty ]; then
-        read -r -p "Select storage [1-${#storages[@]}] (default 1): " choice </dev/tty
-      else
-        read -r -p "Select storage [1-${#storages[@]}] (default 1): " choice
-      fi
-      if [ -z "$choice" ]; then
-        choice=1
-      fi
-      if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#storages[@]}" ]; then
-        STORAGE="${storages[$((choice - 1))]}"
-        break
-      fi
-      echo "Invalid choice. Try again."
-    done
-  else
-    prompt STORAGE "Storage name" "local-lvm"
-    STORAGE="${STORAGE:-local-lvm}"
-  fi
-}
-
 header_info "$APP"
 variables
 color
 catch_errors
+type maxkeys_check >/dev/null 2>&1 && maxkeys_check
+type pve_check >/dev/null 2>&1 && pve_check
+type arch_check >/dev/null 2>&1 && arch_check
 
-STORAGE=""
+start
+build_container
 
-prompt CTID "Container ID"
-prompt HOSTNAME "Hostname" "genbot"
-prompt TEMPLATE "Ubuntu 24.04 template path (e.g. local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst)"
-select_storage
-STORAGE="${STORAGE:-local-lvm}"
-prompt BRIDGE "Network bridge" "vmbr0"
-prompt NET_MODE "Network mode (dhcp/static)" "dhcp"
-NET_MODE="${NET_MODE:-dhcp}"
-prompt DISK "Disk size (e.g. 8G)" "8G"
-prompt MEMORY "Memory MB" "1024"
-prompt SWAP "Swap MB" "512"
-prompt UNPRIV "Unprivileged (1/0)" "1"
+if [ -z "${CTID:-}" ] && [ -n "${CT_ID:-}" ]; then
+  CTID="$CT_ID"
+fi
+if [ -z "${CTID:-}" ]; then
+  msg_error "CTID not set after build_container."
+  exit 1
+fi
 
 echo ""
-msg_info "Enter .env values"
+echo "== .env values =="
 prompt LANGUAGE "LANGUAGE (en/ru)" "ru"
 prompt_secret TOKEN "TOKEN"
 prompt CHANNELID "CHANNELID"
@@ -143,48 +104,8 @@ prompt FUEL_CONSUMPTION "FUEL_CONSUMPTION" "16"
 prompt INITIAL_FUEL "INITIAL_FUEL" "190"
 prompt LOW_FUEL_HOURS "LOW_FUEL_HOURS" "4"
 
-echo ""
-NET_MODE_LOWER="$(printf '%s' "$NET_MODE" | tr '[:upper:]' '[:lower:]')"
-if [ "$NET_MODE_LOWER" = "static" ]; then
-  prompt STATIC_IP "Static IP (e.g. 192.168.1.50/24)"
-  prompt GATEWAY "Gateway (e.g. 192.168.1.1)"
-  NET_CONF="name=eth0,bridge=${BRIDGE},ip=${STATIC_IP},gw=${GATEWAY}"
-else
-  NET_CONF="name=eth0,bridge=${BRIDGE},ip=dhcp"
-fi
-
-msg_info "Creating container..."
-available_storages=()
-while IFS= read -r line; do
-  [ -n "$line" ] && available_storages+=("$line")
-done < <(get_rootdir_storages)
-if [ "${#available_storages[@]}" -gt 0 ]; then
-  if ! printf '%s\n' "${available_storages[@]}" | grep -qx "$STORAGE"; then
-    msg_error "Storage '$STORAGE' is not available for rootdir. Using '${available_storages[0]}'."
-    STORAGE="${available_storages[0]}"
-  fi
-fi
-pct create "$CTID" "$TEMPLATE" \
-  --hostname "$HOSTNAME" \
-  --storage "$STORAGE" \
-  --rootfs "${STORAGE}:${DISK}" \
-  --memory "$MEMORY" \
-  --swap "$SWAP" \
-  --net0 "$NET_CONF" \
-  --unprivileged "$UNPRIV"
-
-msg_info "Starting container..."
-pct start "$CTID"
-
-msg_info "Uploading project..."
-WORKDIR="$(pwd)"
-TMP_TAR="$(mktemp -t genbot.XXXXXX.tar.gz)"
-tar --exclude .git --exclude .venv --exclude __pycache__ --exclude generator.db -czf "$TMP_TAR" -C "$WORKDIR" .
-pct push "$CTID" "$TMP_TAR" /root/genbot.tar.gz
-rm -f "$TMP_TAR"
-
-msg_info "Configuring container..."
-pct exec "$CTID" -- bash -lc "apt-get update && apt-get install -y python3-venv python3-pip && mkdir -p /opt/genbot && tar -xzf /root/genbot.tar.gz -C /opt/genbot && rm -f /root/genbot.tar.gz"
+msg_info "Fetching project..."
+pct exec "$CTID" -- bash -lc "apt-get update && apt-get install -y python3-venv python3-pip curl tar && mkdir -p /opt/genbot && curl -fsSL -L https://github.com/e155/genbot/archive/refs/heads/master.tar.gz -o /tmp/genbot.tar.gz && tar -xzf /tmp/genbot.tar.gz -C /opt/genbot --strip-components=1 && rm -f /tmp/genbot.tar.gz"
 
 ENV_TMP="$(mktemp -t genbot.env.XXXXXX)"
 cat > "$ENV_TMP" <<EOF
