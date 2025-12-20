@@ -1,3 +1,76 @@
+# Generator Monitoring Telegram Bot
+
+Telegram-based monitoring bot for a generator. It uses ICMP ping to detect
+RUNNING/STOPPED state, tracks runtime and fuel usage, and provides reports.
+
+---
+
+## Key features
+
+- Generator state monitoring via ICMP ping (RUNNING / STOPPED).
+- Runtime and fuel usage stats for 24 hours and 7 days.
+- Refuel and fuel reset tracking.
+- Whitelist access control.
+- Daily reports at a scheduled time.
+- Monthly report for the previous month.
+- Admin-only settings view and edit via bot commands.
+
+---
+
+## Settings and behavior
+
+- The bot uses `.env` for configuration and reads values at startup.
+- `INTERVAL` controls ping check frequency.
+- Daily reports use `REPORTH` and `REPORTM`.
+- Monthly report is sent on day 1 at `REPORTH`/`REPORTM`.
+
+### Environment variables
+
+- `TOKEN` Telegram bot token
+- `CHANNELID` target channel ID
+- `ADMIN_USER_ID` admin user ID
+- `BOTURL` bot URL for inline button
+- `LANGUAGE` bot language (`en` or `ru`)
+- `GENERATORNAME` generator display name
+- `GENERATORADDR` generator IP/host for ICMP ping
+- `INTERVAL` ping interval (seconds)
+- `REPORTH` daily report hour (0-23)
+- `REPORTM` daily report minute (0-59)
+- `TANK_CAPACITY` tank capacity (liters)
+- `FUEL_CONSUMPTION` liters per hour
+- `INITIAL_FUEL` initial fuel in tank (liters)
+- `LOW_FUEL_HOURS` low-fuel alert threshold (hours)
+
+---
+
+## Database
+
+SQLite database `generator.db`:
+
+- `generator_log` start/stop history and fuel usage
+- `refuel_log` refuel/reset history
+- `state` current state values
+- `users` whitelist
+
+---
+
+## Bot commands
+
+- `status` current generator status
+- `history` generator activity history
+- `rhistory` refuel/reset history
+- `refuel` add fuel
+- `reset_fuel` set fuel value
+- `month` monthly report for previous month (public)
+- `help` show help
+- `allow` add user (admin)
+- `deny` remove user (admin)
+- `users` list whitelist (admin)
+- `settings` show current settings (admin)
+- `set` update a setting (admin)
+
+---
+
 # ⚡ Generator Monitoring Telegram Bot
 
 Telegram-бот для мониторинга времени работы дизельного/бензинового генератора по сети (ICMP ping),
@@ -146,7 +219,18 @@ removeservice.sh
 - rhistory - Исторя заправко/корректировок: /rhistory 2 - за 2 дня
 - refuel -  Внести заправку: /refuel 50 - 50 литров
 - reset_fuel - Указать новое значение заправки
+- month - Отчет за прошлый месяц (доступно всем)
 - allow id- добавить оператора
 - deny id- убрать оператора
 - users - показать id операторов
+- settings - показать текущие настройки (админ)
+- set - изменить настройку (админ)
 - help - Показать справку
+
+---
+
+## Обновления
+
+- Команды администратора: `/settings` показывает текущие значения, `/set <KEY> <VALUE>` обновляет значения в памяти и `.env`.
+- Месячный отчет: `/month` показывает отчет за прошлый месяц.
+- Авто-отчет за месяц: выполняется 1-го числа в время `REPORTH`/`REPORTM`.

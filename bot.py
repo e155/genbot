@@ -188,6 +188,13 @@ def _apply_setting_value(key: str, value, context: ContextTypes.DEFAULT_TYPE):
             time=dt.time(hour=REPORTH, minute=REPORTM),
             name="daily_report"
         )
+        for job in job_queue.get_jobs_by_name("monthly_report"):
+            job.schedule_removal()
+        job_queue.run_daily(
+            monthly_report,
+            time=dt.time(hour=REPORTH, minute=REPORTM),
+            name="monthly_report"
+        )
 
 # ================= DATABASE =================
 
@@ -686,6 +693,43 @@ def get_stats(hours: int):
         row = cur.fetchone()
         return row[0] or 0, row[1] or 0
 
+
+def get_month_range(now: dt.datetime) -> tuple[dt.datetime, dt.datetime]:
+    if now.month == 1:
+        start = dt.datetime(now.year - 1, 12, 1)
+    else:
+        start = dt.datetime(now.year, now.month - 1, 1)
+    end = dt.datetime(now.year, now.month, 1)
+    return start, end
+
+
+def get_monthly_stats(start: dt.datetime, end: dt.datetime) -> tuple[int, float, float]:
+    start_iso = start.isoformat()
+    end_iso = end.isoformat()
+
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute("""
+            SELECT
+                SUM(runtime_seconds),
+                SUM(fuel_used)
+            FROM generator_log
+            WHERE start_time >= ? AND start_time < ?
+        """, (start_iso, end_iso))
+        row = cur.fetchone()
+        runtime = row[0] or 0
+        fuel_used = row[1] or 0.0
+
+        cur = conn.execute("""
+            SELECT
+                SUM(amount)
+            FROM refuel_log
+            WHERE timestamp >= ? AND timestamp < ? AND amount > 0
+        """, (start_iso, end_iso))
+        row = cur.fetchone()
+        refuel_added = row[0] or 0.0
+
+    return runtime, fuel_used, refuel_added
+
 # ================= restart msg =================
 async def startup_message(app: Application):
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -968,6 +1012,25 @@ async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
 
+
+async def month_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    now = dt.datetime.now()
+    start, end = get_month_range(now)
+    runtime, fuel_used, refuel_added = get_monthly_stats(start, end)
+
+    month_label = start.strftime("%Y-%m")
+    msg = t(
+        "monthly_report",
+        generator=GENERATORNAME,
+        month=month_label,
+        runtime_hours=runtime // 3600,
+        runtime_minutes=(runtime % 3600) // 60,
+        fuel_used=fuel_used,
+        refuel_added=refuel_added,
+    )
+
+    await update.message.reply_text(msg)
+
 async def daily_report(context: ContextTypes.DEFAULT_TYPE):
     app = context.application
     now = dt.datetime.now()
@@ -1000,6 +1063,28 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
     await send(app, msg)
 
 
+async def monthly_report(context: ContextTypes.DEFAULT_TYPE):
+    now = dt.datetime.now()
+    if now.day != 1:
+        return
+
+    start, end = get_month_range(now)
+    runtime, fuel_used, refuel_added = get_monthly_stats(start, end)
+
+    month_label = start.strftime("%Y-%m")
+    msg = t(
+        "monthly_report",
+        generator=GENERATORNAME,
+        month=month_label,
+        runtime_hours=runtime // 3600,
+        runtime_minutes=(runtime % 3600) // 60,
+        fuel_used=fuel_used,
+        refuel_added=refuel_added,
+    )
+
+    await send(context.application, msg)
+
+
 
 # ================= MAIN ==================
 async def post_init(app: Application):
@@ -1017,6 +1102,12 @@ async def post_init(app: Application):
         daily_report,
         time=dt.time(hour=REPORTH, minute=REPORTM),
         name="daily_report"
+    )
+    # monthly report
+    app.job_queue.run_daily(
+        monthly_report,
+        time=dt.time(hour=REPORTH, minute=REPORTM),
+        name="monthly_report"
     )
 
 
@@ -1038,6 +1129,7 @@ def main():
     app.add_handler(CommandHandler("users", users_cmd))
     app.add_handler(CommandHandler("settings", settings_cmd))
     app.add_handler(CommandHandler("set", set_setting_cmd))
+    app.add_handler(CommandHandler("month", month_cmd))
 
 
     app.post_init = post_init
