@@ -70,7 +70,7 @@ MESSAGES = {
         ),
         "low_fuel_alert": (
             "❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️\n"
-            "[ALERT] Low fuel for {generator}\n"
+            "❗️Low fuel for {generator}\n"
             "⛽️Fuel left (est.): {fuel_left:.1f} L\n"
             "⏳Estimated runtime: {remaining_time}\n"
             "⚠️Threshold: < {threshold:.2f} h"
@@ -109,6 +109,8 @@ MESSAGES = {
             "  Example: /reset_fuel 190\n\n"
             "/help\n"
             "  Show this help message\n\n"
+            "/month\n"
+            "  Show monthly report for last month\n\n"
             "Admin only:\n"
             "/allow <user_id>\n"
             "  Add user to whitelist\n"
@@ -136,6 +138,13 @@ MESSAGES = {
             "💤Generator was NOT running in last 24h\n\n"
             "⛽️Fuel left: {fuel_left:.1f} L\n"
             "⏳Estimated runtime: {remaining_time}"
+        ),
+        "monthly_report": (
+            "📅MONTHLY REPORT: {generator}\n\n"
+            "Month: {month}\n\n"
+            "⏱️Runtime: {runtime_hours}h {runtime_minutes}m\n"
+            "⛽️🔽 Fuel used: {fuel_used:.1f} L\n"
+            "⛽️➕ Refueled: {refuel_added:.1f} L"
         ),
     },
     "ru": {
@@ -205,7 +214,7 @@ MESSAGES = {
         ),
         "low_fuel_alert": (
             "❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️❗️\n"
-            "[ALERT] Низкий уровень топлива для {generator}\n"
+            "❗️ Низкий уровень топлива для {generator}\n"
             "⛽️Остаток (оценка): {fuel_left:.1f} л\n"
             "⏳Оставшееся время: {remaining_time}\n"
             "⚠️Порог: < {threshold:.2f} ч"
@@ -244,6 +253,8 @@ MESSAGES = {
             "  Пример: /reset_fuel 190\n\n"
             "/help\n"
             "  Показать это сообщение\n\n"
+            "/month\n"
+            "  Показать отчет за прошлый месяц\n\n"
             "Только для админа:\n"
             "/allow <user_id>\n"
             "  Добавить в белый список\n"
@@ -271,6 +282,13 @@ MESSAGES = {
             "💤Генератор не работал за последние 24ч\n\n"
             "⛽️Остаток: {fuel_left:.1f} л\n"
             "⏳Оставшееся время: {remaining_time}"
+        ),
+        "monthly_report": (
+            "📅ЕЖЕМЕСЯЧНЫЙ ОТЧЕТ: {generator}\n\n"
+            "Месяц: {month}\n\n"
+            "⏱️Время работы: {runtime_hours}ч {runtime_minutes}м\n"
+            "⛽️🔽 Расход: {fuel_used:.1f} л\n"
+            "⛽️➕ Заправлено: {refuel_added:.1f} л"
         ),
     },
 }
