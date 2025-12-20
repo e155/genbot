@@ -13,12 +13,20 @@ prompt() {
   local input
 
   if [ -n "$default_value" ]; then
-    read -r -p "$prompt_text [$default_value]: " input
+    if [ -r /dev/tty ]; then
+      read -r -p "$prompt_text [$default_value]: " input </dev/tty
+    else
+      read -r -p "$prompt_text [$default_value]: " input
+    fi
     if [ -z "$input" ]; then
       input="$default_value"
     fi
   else
-    read -r -p "$prompt_text: " input
+    if [ -r /dev/tty ]; then
+      read -r -p "$prompt_text: " input </dev/tty
+    else
+      read -r -p "$prompt_text: " input
+    fi
   fi
 
   printf -v "$var_name" '%s' "$input"
@@ -29,7 +37,11 @@ prompt_secret() {
   local prompt_text="$2"
   local input
 
-  read -r -s -p "$prompt_text: " input
+  if [ -r /dev/tty ]; then
+    read -r -s -p "$prompt_text: " input </dev/tty
+  else
+    read -r -s -p "$prompt_text: " input
+  fi
   echo ""
   printf -v "$var_name" '%s' "$input"
 }
@@ -70,10 +82,13 @@ select_storage() {
 
 echo "== Proxmox LXC deployment for genbot =="
 
+STORAGE=""
+
 prompt CTID "Container ID"
 prompt HOSTNAME "Hostname" "genbot"
 prompt TEMPLATE "Ubuntu 24.04 template path (e.g. local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst)"
 select_storage
+STORAGE="${STORAGE:-local-lvm}"
 prompt BRIDGE "Network bridge" "vmbr0"
 prompt NET_MODE "Network mode (dhcp/static)" "dhcp"
 NET_MODE="${NET_MODE:-dhcp}"
