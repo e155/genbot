@@ -46,6 +46,7 @@ prompt TEMPLATE "Ubuntu 24.04 template path (e.g. local:vztmpl/ubuntu-24.04-stan
 prompt STORAGE "Storage name" "local-lvm"
 prompt BRIDGE "Network bridge" "vmbr0"
 prompt NET_MODE "Network mode (dhcp/static)" "dhcp"
+NET_MODE="${NET_MODE:-dhcp}"
 prompt DISK "Disk size (e.g. 8G)" "8G"
 prompt MEMORY "Memory MB" "1024"
 prompt SWAP "Swap MB" "512"
