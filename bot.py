@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime as dt
+import json
 import os
 import re
 import sqlite3
 import subprocess
+import urllib.parse
+import urllib.request
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -26,7 +29,9 @@ from settings import (
     DB_FILE,
     LOW_FUEL_HOURS,
     ADMIN_USER_ID,
-    BOTURL
+    BOTURL,
+    TELEGRAPH_TOKEN,
+    TELEGRAPH_AUTHOR
 )
 
 import localization as localization_module
@@ -81,6 +86,93 @@ def _update_env_file(key: str, value_str: str) -> bool:
         f.writelines(lines)
 
     return True
+
+
+def _mdv2_codeblock_table(rows: list[list[str]]) -> str:
+    # MarkdownV2 code block; avoid backticks to keep formatting intact.
+    safe_lines = [" ".join(cell.replace("`", "'") for cell in row) for row in rows]
+    return "```\n" + "\n".join(safe_lines) + "\n```"
+
+
+_MDV2_ESCAPE_RE = re.compile(r"([_*[\]()~`>#+\-=|{}.!])")
+_telegraph_token = TELEGRAPH_TOKEN
+
+
+def _mdv2_escape(text: str) -> str:
+    return _MDV2_ESCAPE_RE.sub(r"\\\1", text)
+
+
+def _clip(text: str, width: int) -> str:
+    if len(text) <= width:
+        return text
+    return text[:width]
+
+
+def _table_header_row(key: str, widths: list[int], defaults: list[str]) -> list[str]:
+    raw = t(key)
+    cols = raw.split("|")
+    if len(cols) != len(widths):
+        cols = defaults
+    return [f"{_clip(col.strip(), width):<{width}}" for col, width in zip(cols, widths)]
+
+
+def _table_text(rows: list[list[str]]) -> str:
+    return "\n".join(" ".join(row) for row in rows)
+
+
+def _mdv2_link(text: str, url: str) -> str:
+    safe_url = url.replace("(", "%28").replace(")", "%29")
+    return f"[{_mdv2_escape(text)}]({safe_url})"
+
+
+def _telegraph_call(method: str, params: dict) -> dict | None:
+    data = urllib.parse.urlencode(params).encode("utf-8")
+    req = urllib.request.Request(f"https://api.telegra.ph/{method}", data=data)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not payload.get("ok"):
+        return None
+    return payload.get("result")
+
+
+def _telegraph_get_token() -> str | None:
+    global _telegraph_token
+    if _telegraph_token:
+        return _telegraph_token
+    short_name = "genbot"
+    author_name = TELEGRAPH_AUTHOR or GENERATORNAME or "Generator Bot"
+    result = _telegraph_call(
+        "createAccount",
+        {"short_name": short_name, "author_name": author_name, "author_url": BOTURL or ""},
+    )
+    if not result:
+        return None
+    _telegraph_token = result.get("access_token")
+    return _telegraph_token
+
+
+def _create_telegraph_page(title: str, table_text: str) -> str | None:
+    token = _telegraph_get_token()
+    if not token:
+        return None
+    content = json.dumps([{"tag": "pre", "children": [table_text]}], ensure_ascii=True)
+    result = _telegraph_call(
+        "createPage",
+        {
+            "access_token": token,
+            "title": title,
+            "author_name": TELEGRAPH_AUTHOR or GENERATORNAME or "Generator Bot",
+            "author_url": BOTURL or "",
+            "content": content,
+            "return_content": "false",
+        },
+    )
+    if not result:
+        return None
+    return result.get("url")
 
 
 def _get_setting_value(key: str):
@@ -501,29 +593,51 @@ async def refuel_history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    lines = [t("refuel_history_header", days=days)]
+    header_raw = t("refuel_history_header", days=days)
+    header = _mdv2_escape(header_raw)
+    widths = [16, 12, 7, 7, 12]
+    table_rows = [
+        _table_header_row(
+            "refuel_table_cols",
+            widths,
+            ["TIME", "ACTION", "BEFORE", "AFTER", "USER"],
+        )
+    ]
 
     for ts, amount, before, after, user in rows:
-        time_str = ts.replace("T", " ")[:16]
+        time_str = _clip(ts.replace("T", " ")[5:16], widths[0])
         action = (
             t("refuel_history_action_add", amount=amount)
             if amount > 0
             else t("refuel_history_action_reset")
         )
+        action_s = _clip(action, widths[1])
+        before_s = f"{before:>{widths[2]}.1f}"
+        after_s = f"{after:>{widths[3]}.1f}"
+        user_s = _clip(user or t("unknown_user"), widths[4])
 
-        lines.append(
-            t(
-                "refuel_history_line",
-                time=time_str,
-                action=action,
-                before=before,
-                after=after,
-                user=user or t("unknown_user"),
-            )
+        table_rows.append(
+            [
+                f"{time_str:<{widths[0]}}",
+                f"{action_s:<{widths[1]}}",
+                f"{before_s:>{widths[2]}}",
+                f"{after_s:>{widths[3]}}",
+                f"{user_s:<{widths[4]}}",
+            ]
         )
 
-
-    await update.message.reply_text("\n".join(lines))
+    table_text = _table_text(table_rows)
+    table = _mdv2_codeblock_table(table_rows)
+    report_url = await asyncio.to_thread(_create_telegraph_page, header_raw, table_text)
+    report_line = (
+        f"\n{t('report_link', link=_mdv2_link('Telegraph', report_url))}"
+        if report_url
+        else ""
+    )
+    await update.message.reply_text(
+        f"{header}\n{table}{report_line}",
+        parse_mode="MarkdownV2",
+    )
 
 # ================= History =====================
 
@@ -560,28 +674,52 @@ async def history_cmd(update, context: ContextTypes.DEFAULT_TYPE):
             t("history_empty", days=days)
         )
         return
-
-    lines = [t("history_header", days=days)]
+    header_raw = t("history_header", days=days)
+    header = _mdv2_escape(header_raw)
+    widths = [16, 16, 9, 7]
+    table_rows = [
+        _table_header_row(
+            "history_table_cols",
+            widths,
+            ["START", "STOP", "RUN", "FUEL(L)"],
+        )
+    ]
 
     for start, stop, runtime, fuel in rows:
-        start_s = start.replace("T", " ")[:16]
-        stop_s = stop.replace("T", " ")[:16] if stop else t("not_available")
+        start_s = _clip(start.replace("T", " ")[:16], widths[0])
+        stop_s = _clip(stop.replace("T", " ")[:16], widths[1]) if stop else _clip(
+            t("not_available"), widths[1]
+        )
 
         hours = runtime // 3600
         minutes = (runtime % 3600) // 60
+        run_s = _clip(
+            t("history_table_run_format", hours=hours, minutes=minutes),
+            widths[2],
+        )
+        fuel_s = f"{fuel:>{widths[3]}.1f}"
 
-        lines.append(
-            t(
-                "history_line",
-                start=start_s,
-                stop=stop_s,
-                hours=hours,
-                minutes=minutes,
-                fuel=fuel,
-            )
+        table_rows.append(
+            [
+                f"{start_s:<{widths[0]}}",
+                f"{stop_s:<{widths[1]}}",
+                f"{run_s:<{widths[2]}}",
+                f"{fuel_s:>{widths[3]}}",
+            ]
         )
 
-    await update.message.reply_text("\n".join(lines))
+    table_text = _table_text(table_rows)
+    table = _mdv2_codeblock_table(table_rows)
+    report_url = await asyncio.to_thread(_create_telegraph_page, header_raw, table_text)
+    report_line = (
+        f"\n{t('report_link', link=_mdv2_link('Telegraph', report_url))}"
+        if report_url
+        else ""
+    )
+    await update.message.reply_text(
+        f"{header}\n{table}{report_line}",
+        parse_mode="MarkdownV2",
+    )
 
 
 # ================= TELEGRAM =================

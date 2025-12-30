@@ -6,6 +6,8 @@ ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 TOKEN = os.getenv("TOKEN")
 CHANNELID = os.getenv("CHANNELID")
 BOTURL = os.getenv("BOTURL")
+TELEGRAPH_TOKEN = os.getenv("TELEGRAPH_TOKEN")
+TELEGRAPH_AUTHOR = os.getenv("TELEGRAPH_AUTHOR")
 if TOKEN is None:
     raise Exception("Please setup the .env variable TELEGRAM_TOKEN.")
 
