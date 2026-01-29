@@ -6,8 +6,10 @@ import os
 import re
 import sqlite3
 import subprocess
+import tempfile
 import urllib.parse
 import urllib.request
+from PIL import Image, ImageDraw, ImageFont
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -490,7 +492,14 @@ def _hours_minutes_from_seconds(seconds: int) -> tuple[int, int]:
     minutes = total_minutes % 60
     return hours, minutes
 
-def get_total_runtime_seconds(now: dt.datetime | None = None) -> int:
+def get_motohours_offset_seconds() -> int:
+    raw = get_state("motohours_offset_seconds", "0")
+    try:
+        return int(float(raw))
+    except ValueError:
+        return 0
+
+def get_total_runtime_seconds(now: dt.datetime | None = None, *, include_offset: bool = True) -> int:
     if now is None:
         now = dt.datetime.now()
     with sqlite3.connect(DB_FILE) as conn:
@@ -499,6 +508,8 @@ def get_total_runtime_seconds(now: dt.datetime | None = None) -> int:
         total = int(row[0] or 0)
     if get_state("running", "0") == "1":
         total += get_used_since_start_seconds(now)
+    if include_offset:
+        total += get_motohours_offset_seconds()
     return total
 
 def get_service_due_seconds() -> float | None:
@@ -509,6 +520,129 @@ def get_service_due_seconds() -> float | None:
         return float(raw)
     except ValueError:
         return None
+
+def _get_aligned_window_end(now: dt.datetime) -> dt.datetime:
+    return now.replace(minute=0, second=0, microsecond=0)
+
+def _get_run_intervals_last24h(window_end: dt.datetime) -> list[tuple[dt.datetime, dt.datetime]]:
+    window_start = window_end - dt.timedelta(hours=24)
+    rows: list[tuple[str, str]] = []
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute("""
+            SELECT start_time, stop_time
+            FROM generator_log
+            WHERE start_time <= ? AND stop_time >= ?
+        """, (window_end.isoformat(), window_start.isoformat()))
+        rows = cur.fetchall()
+
+    intervals: list[tuple[dt.datetime, dt.datetime]] = []
+    for start_s, stop_s in rows:
+        start_dt = _parse_iso(start_s)
+        stop_dt = _parse_iso(stop_s)
+        if not start_dt or not stop_dt:
+            continue
+        # Clamp to window
+        start_dt = max(start_dt, window_start)
+        stop_dt = min(stop_dt, window_end)
+        if stop_dt > start_dt:
+            intervals.append((start_dt, stop_dt))
+
+    # Add current running interval if needed
+    if get_state("running", "0") == "1":
+        start_dt = _parse_iso(get_state("start_time"))
+        if start_dt:
+            start_dt = max(start_dt, window_start)
+            if window_end > start_dt:
+                intervals.append((start_dt, window_end))
+
+    return intervals
+
+def _bins_running(
+    intervals: list[tuple[dt.datetime, dt.datetime]],
+    window_end: dt.datetime,
+    bin_minutes: int,
+) -> list[bool]:
+    window_start = window_end - dt.timedelta(hours=24)
+    total_bins = int((24 * 60) / bin_minutes)
+    bins = [False] * total_bins
+    for i in range(total_bins):
+        bin_start = window_start + dt.timedelta(minutes=i * bin_minutes)
+        bin_end = bin_start + dt.timedelta(minutes=bin_minutes)
+        for s, e in intervals:
+            if e > bin_start and s < bin_end:
+                bins[i] = True
+                break
+    return bins
+
+def _generate_daily_grid_image(
+    minute_bins: list[bool],
+    bin_minutes: int,
+    window_end: dt.datetime,
+    size: int = 640,
+) -> str:
+    cols = 6
+    rows = 4
+    img = Image.new("RGB", (size, size), "white")
+    draw = ImageDraw.Draw(img)
+
+    margin = int(size * 0.06)
+    grid_w = size - 2 * margin
+    grid_h = size - 2 * margin
+    cell_w = grid_w / cols
+    cell_h = grid_h / rows
+
+    font_size = int(size * 0.05)
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except Exception:
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+
+    window_start = window_end - dt.timedelta(hours=24)
+
+    bins_per_hour = int(60 / bin_minutes)
+    for idx in range(24):
+        r = idx // cols
+        c = idx % cols
+        x0 = margin + c * cell_w
+        y0 = margin + r * cell_h
+        x1 = x0 + cell_w
+        y1 = y0 + cell_h
+
+        # Draw active 5-min bins aligned within the hour
+        start = idx * bins_per_hour
+        end = start + bins_per_hour
+        bin_w = cell_w / bins_per_hour
+        for j, active in enumerate(minute_bins[start:end]):
+            if not active:
+                continue
+            bx0 = x0 + j * bin_w
+            bx1 = bx0 + bin_w
+            draw.rectangle([bx0, y0, bx1, y1], fill=(220, 40, 40))
+
+        # Cell border
+        draw.rectangle([x0, y0, x1, y1], outline=(180, 180, 180))
+
+        # Hour label (start of the hour, last 24h window)
+        hour_dt = window_start + dt.timedelta(hours=idx)
+        label = hour_dt.strftime("%H")
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        draw.text(
+            (x0 + (cell_w - text_w) / 2, y0 + (cell_h - text_h) / 2),
+            label,
+            fill=(60, 60, 60),
+            font=font,
+        )
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    tmp_path = tmp.name
+    tmp.close()
+    img.save(tmp_path, format="PNG")
+    return tmp_path
 
 def _parse_iso(dt_str: str | None) -> dt.datetime | None:
     if not dt_str:
@@ -952,6 +1086,22 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(msg)
 
+    # Debug: send last-24h dial image in /status
+    img_path = None
+    try:
+        window_end = _get_aligned_window_end(now)
+        intervals = _get_run_intervals_last24h(window_end)
+        bins = _bins_running(intervals, window_end, bin_minutes=5)
+        img_path = _generate_daily_grid_image(bins, 5, window_end)
+        with open(img_path, "rb") as f:
+            await update.message.reply_photo(photo=f)
+    finally:
+        if img_path:
+            try:
+                os.unlink(img_path)
+            except Exception:
+                pass
+
 @whitelist_required
 async def refuel_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -1252,6 +1402,37 @@ async def setservice_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         t("setservice_done", hours=hours)
     )
 
+async def setmhours_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text(t("admin_only"))
+        return
+
+    if not context.args:
+        await update.message.reply_text(t("setmhours_usage"))
+        return
+
+    raw_value = context.args[0]
+    try:
+        hours = float(raw_value)
+    except ValueError:
+        await update.message.reply_text(t("setmhours_invalid_value"))
+        return
+
+    if hours < 0:
+        await update.message.reply_text(t("setmhours_invalid_value"))
+        return
+
+    raw_total = get_total_runtime_seconds(include_offset=False)
+    target_seconds = int(hours * 3600)
+    offset_seconds = target_seconds - raw_total
+    set_state("motohours_offset_seconds", offset_seconds)
+
+    await update.message.reply_text(
+        t("setmhours_done", hours=hours)
+    )
+
 async def month_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     now = dt.datetime.now()
     start, end = get_month_range(now)
@@ -1300,6 +1481,22 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
         )
 
     await send(app, msg)
+
+    # Dial image for last 24h runtime
+    img_path = None
+    try:
+        window_end = _get_aligned_window_end(now)
+        intervals = _get_run_intervals_last24h(window_end)
+        bins = _bins_running(intervals, window_end, bin_minutes=5)
+        img_path = _generate_daily_grid_image(bins, 5, window_end)
+        with open(img_path, "rb") as f:
+            await app.bot.send_photo(chat_id=CHANNELID, photo=f)
+    finally:
+        if img_path:
+            try:
+                os.unlink(img_path)
+            except Exception:
+                pass
 
 
 async def monthly_report(context: ContextTypes.DEFAULT_TYPE):
@@ -1369,6 +1566,7 @@ def main():
     app.add_handler(CommandHandler("settings", settings_cmd))
     app.add_handler(CommandHandler("set", set_setting_cmd))
     app.add_handler(CommandHandler("setservice", setservice_cmd))
+    app.add_handler(CommandHandler("setmhours", setmhours_cmd))
     app.add_handler(CommandHandler("month", month_cmd))
 
 

@@ -69,6 +69,9 @@ MESSAGES = {
         "setservice_invalid_value": "Invalid hours value.",
         "setservice_done": "Next service set in {hours} h.",
         "setservice_cleared": "Service reminder cleared.",
+        "setmhours_usage": "Usage: /setmhours <hours>\nExample: /setmhours 123.5",
+        "setmhours_invalid_value": "Invalid hours value.",
+        "setmhours_done": "Motohours set to {hours} h.",
         "refuel_usage": "❕Usage: /refuel <liters>",
         "refuel_invalid_amount": "❕Invalid fuel amount.",
         "refuel_saved": (
@@ -142,6 +145,8 @@ MESSAGES = {
             "  Show current settings\n"
             "/set <KEY> <VALUE>\n"
             "  Update setting in .env and runtime"
+            "/setmhours <hours>\n"
+            "  Adjust total motohours\n"
         ),
         "daily_report_running": (
             "📊DAILY REPORT: {generator}\n\n"
@@ -230,6 +235,9 @@ MESSAGES = {
             "Запланируйте обслуживание и задайте следующее через /setservice X"
         ),
         "setservice_usage": "Использование: /setservice <часы>\nПример: /setservice 100",
+        "setmhours_usage": "Использование: /setmhours <часы>\nПример: /setmhours 123.5",
+        "setmhours_invalid_value": "Некорректное значение часов.",
+        "setmhours_done": "Моточасы установлены на {hours} ч.",
         "setservice_invalid_value": "Некорректное значение часов.",
         "setservice_done": "Следующее обслуживание через {hours} ч.",
         "setservice_cleared": "Напоминание о сервисе сброшено.",

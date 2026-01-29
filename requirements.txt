@@ -4,3 +4,4 @@ telegram
 ping3
 python-dotenv
 pyTelegramBotAPI
+Pillow
