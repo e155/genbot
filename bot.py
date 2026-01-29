@@ -484,6 +484,32 @@ def remaining_hours_from_fuel(fuel_left: float) -> float:
         return 1e9
     return max(0.0, fuel_left / FUEL_CONSUMPTION)
 
+def _hours_minutes_from_seconds(seconds: int) -> tuple[int, int]:
+    total_minutes = max(0, seconds) // 60
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    return hours, minutes
+
+def get_total_runtime_seconds(now: dt.datetime | None = None) -> int:
+    if now is None:
+        now = dt.datetime.now()
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute("SELECT SUM(runtime_seconds) FROM generator_log")
+        row = cur.fetchone()
+        total = int(row[0] or 0)
+    if get_state("running", "0") == "1":
+        total += get_used_since_start_seconds(now)
+    return total
+
+def get_service_due_seconds() -> float | None:
+    raw = get_state("service_due_seconds")
+    if raw is None or raw == "":
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
 def _parse_iso(dt_str: str | None) -> dt.datetime | None:
     if not dt_str:
         return None
@@ -887,6 +913,20 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 
     day_runtime, day_fuel = get_stats(24)
     week_runtime, week_fuel = get_stats(24 * 7)
+    total_runtime = get_total_runtime_seconds(now)
+    total_h, total_m = _hours_minutes_from_seconds(total_runtime)
+
+    due_seconds = get_service_due_seconds()
+    if due_seconds is None:
+        service_line = t("service_not_set_line")
+    else:
+        remaining = int(due_seconds - total_runtime)
+        if remaining > 0:
+            rem_h, rem_m = _hours_minutes_from_seconds(remaining)
+            service_line = t("service_remaining_line", hours=rem_h, minutes=rem_m)
+        else:
+            overdue_h, overdue_m = _hours_minutes_from_seconds(-remaining)
+            service_line = t("service_overdue_line", hours=overdue_h, minutes=overdue_m)
 
     state_label = t("state_running") if running else t("state_stopped")
 
@@ -902,6 +942,12 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         week_hours=week_runtime // 3600,
         week_minutes=(week_runtime % 3600) // 60,
         week_fuel=week_fuel,
+    )
+
+    msg = (
+        f"{msg}\n\n"
+        f"{t('motohours_line', total_hours=total_h, total_minutes=total_m)}\n"
+        f"{service_line}"
     )
 
     await update.message.reply_text(msg)
@@ -1069,6 +1115,24 @@ async def monitor_job(context: ContextTypes.DEFAULT_TYPE):
         if rem_h >= LOW_FUEL_HOURS:
             set_state("low_fuel_alerted", 0)
 
+    # Service reminder
+    due_seconds = get_service_due_seconds()
+    if due_seconds is not None:
+        total_runtime = get_total_runtime_seconds(now)
+        alerted = get_state("service_alerted", "0") == "1"
+        if (total_runtime >= due_seconds) and (not alerted):
+            total_h, total_m = _hours_minutes_from_seconds(total_runtime)
+            await send(
+                context.application,
+                t(
+                    "service_due_alert",
+                    generator=GENERATORNAME,
+                    total_hours=total_h,
+                    total_minutes=total_m,
+                )
+            )
+            set_state("service_alerted", 1)
+
     # START
     if alive and not running:
         running = True
@@ -1150,6 +1214,43 @@ async def start_cmd(update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
 
+
+async def setservice_cmd(update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text(t("admin_only"))
+        return
+
+    if not context.args:
+        await update.message.reply_text(t("setservice_usage"))
+        return
+
+    raw_value = context.args[0]
+    try:
+        hours = float(raw_value)
+    except ValueError:
+        await update.message.reply_text(t("setservice_invalid_value"))
+        return
+
+    if hours < 0:
+        await update.message.reply_text(t("setservice_invalid_value"))
+        return
+
+    if hours == 0:
+        set_state("service_due_seconds", "")
+        set_state("service_alerted", 0)
+        await update.message.reply_text(t("setservice_cleared"))
+        return
+
+    total_runtime = get_total_runtime_seconds()
+    due_seconds = total_runtime + int(hours * 3600)
+    set_state("service_due_seconds", due_seconds)
+    set_state("service_alerted", 0)
+
+    await update.message.reply_text(
+        t("setservice_done", hours=hours)
+    )
 
 async def month_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     now = dt.datetime.now()
@@ -1267,6 +1368,7 @@ def main():
     app.add_handler(CommandHandler("users", users_cmd))
     app.add_handler(CommandHandler("settings", settings_cmd))
     app.add_handler(CommandHandler("set", set_setting_cmd))
+    app.add_handler(CommandHandler("setservice", setservice_cmd))
     app.add_handler(CommandHandler("month", month_cmd))
 
 

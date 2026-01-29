@@ -56,6 +56,19 @@ MESSAGES = {
             "  ⏱️Runtime: {week_hours}h {week_minutes}m\n"
             "  ⛽️🔽 Fuel used: {week_fuel:.1f} L"
         ),
+        "motohours_line": "Total runtime: {total_hours}h {total_minutes}m",
+        "service_not_set_line": "Service: not set (use /setservice X)",
+        "service_remaining_line": "Service in: {hours}h {minutes}m",
+        "service_overdue_line": "Service overdue by: {hours}h {minutes}m",
+        "service_due_alert": (
+            "??????SERVICE DUE: {generator}\n"
+            "Total runtime: {total_hours}h {total_minutes}m\n"
+            "Please schedule maintenance and set next service via /setservice X"
+        ),
+        "setservice_usage": "Usage: /setservice <hours>\nExample: /setservice 100",
+        "setservice_invalid_value": "Invalid hours value.",
+        "setservice_done": "Next service set in {hours} h.",
+        "setservice_cleared": "Service reminder cleared.",
         "refuel_usage": "❕Usage: /refuel <liters>",
         "refuel_invalid_amount": "❕Invalid fuel amount.",
         "refuel_saved": (
@@ -115,6 +128,9 @@ MESSAGES = {
             "  Show this help message\n\n"
             "/month\n"
             "  Show monthly report for last month\n\n"
+            "/setservice <hours>\n"
+            "  Set next service after X hours of runtime\n"
+            "  Use /setservice 0 to clear the reminder\n\n"
             "Admin only:\n"
             "/allow <user_id>\n"
             "  Add user to whitelist\n"
@@ -204,6 +220,19 @@ MESSAGES = {
             "  ⏱️Время работы: {week_hours}ч {week_minutes}м\n"
             "  ⛽️🔽 Расход: {week_fuel:.1f} л"
         ),
+        "motohours_line": "Моточасы: {total_hours}ч {total_minutes}м",
+        "service_not_set_line": "Сервис не задан (используйте /setservice X)",
+        "service_remaining_line": "Сервис через: {hours}ч {minutes}м",
+        "service_overdue_line": "Просрочка сервиса: {hours}ч {minutes}м",
+        "service_due_alert": (
+            "❗️СЕРВИС: {generator}\n"
+            "Моточасы: {total_hours}ч {total_minutes}м\n"
+            "Запланируйте обслуживание и задайте следующее через /setservice X"
+        ),
+        "setservice_usage": "Использование: /setservice <часы>\nПример: /setservice 100",
+        "setservice_invalid_value": "Некорректное значение часов.",
+        "setservice_done": "Следующее обслуживание через {hours} ч.",
+        "setservice_cleared": "Напоминание о сервисе сброшено.",
         "refuel_usage": "❕Использование: /refuel <liters>",
         "refuel_invalid_amount": "❕Некорректное количество топлива.",
         "refuel_saved": (
@@ -263,6 +292,9 @@ MESSAGES = {
             "  Показать это сообщение\n\n"
             "/month\n"
             "  Показать отчет за прошлый месяц\n\n"
+            "/setservice <часы>\n"
+            "  Задать следующее обслуживание через X часов работы\n"
+            "  /setservice 0 для сброса напоминания\n\n"
             "Только для админа:\n"
             "/allow <user_id>\n"
             "  Добавить в белый список\n"
