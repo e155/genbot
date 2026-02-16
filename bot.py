@@ -521,6 +521,20 @@ def get_service_due_seconds() -> float | None:
     except ValueError:
         return None
 
+
+def _build_service_line(total_runtime: int) -> str:
+    due_seconds = get_service_due_seconds()
+    if due_seconds is None:
+        return t("service_not_set_line")
+
+    remaining = int(due_seconds - total_runtime)
+    if remaining > 0:
+        rem_h, rem_m = _hours_minutes_from_seconds(remaining)
+        return t("service_remaining_line", hours=rem_h, minutes=rem_m)
+
+    overdue_h, overdue_m = _hours_minutes_from_seconds(-remaining)
+    return t("service_overdue_line", hours=overdue_h, minutes=overdue_m)
+
 def _get_aligned_window_end(now: dt.datetime) -> dt.datetime:
     return now.replace(minute=0, second=0, microsecond=0)
 
@@ -932,6 +946,20 @@ async def settings_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         value = _get_setting_value(key)
         lines.append(t("settings_line", setting_key=key, value=value))
 
+    total_runtime = get_total_runtime_seconds()
+    total_h, total_m = _hours_minutes_from_seconds(total_runtime)
+    lines.append(t("motohours_line", total_hours=total_h, total_minutes=total_m))
+
+    due_seconds = get_service_due_seconds()
+    if due_seconds is None:
+        lines.append(t("service_not_set_line"))
+    else:
+        due_h, due_m = _hours_minutes_from_seconds(int(due_seconds))
+        lines.append(
+            t("settings_line", setting_key="SERVICE_DUE_AT", value=f"{due_h}h {due_m}m")
+        )
+        lines.append(_build_service_line(total_runtime))
+
     await update.message.reply_text("\n".join(lines))
 
 
@@ -1049,18 +1077,7 @@ async def status_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     week_runtime, week_fuel = get_stats(24 * 7)
     total_runtime = get_total_runtime_seconds(now)
     total_h, total_m = _hours_minutes_from_seconds(total_runtime)
-
-    due_seconds = get_service_due_seconds()
-    if due_seconds is None:
-        service_line = t("service_not_set_line")
-    else:
-        remaining = int(due_seconds - total_runtime)
-        if remaining > 0:
-            rem_h, rem_m = _hours_minutes_from_seconds(remaining)
-            service_line = t("service_remaining_line", hours=rem_h, minutes=rem_m)
-        else:
-            overdue_h, overdue_m = _hours_minutes_from_seconds(-remaining)
-            service_line = t("service_overdue_line", hours=overdue_h, minutes=overdue_m)
+    service_line = _build_service_line(total_runtime)
 
     state_label = t("state_running") if running else t("state_stopped")
 
@@ -1437,6 +1454,9 @@ async def month_cmd(update, context: ContextTypes.DEFAULT_TYPE):
     now = dt.datetime.now()
     start, end = get_month_range(now)
     runtime, fuel_used, refuel_added = get_monthly_stats(start, end)
+    total_runtime = get_total_runtime_seconds(now)
+    total_h, total_m = _hours_minutes_from_seconds(total_runtime)
+    service_line = _build_service_line(total_runtime)
 
     month_label = start.strftime("%Y-%m")
     msg = t(
@@ -1448,6 +1468,11 @@ async def month_cmd(update, context: ContextTypes.DEFAULT_TYPE):
         fuel_used=fuel_used,
         refuel_added=refuel_added,
     )
+    msg = (
+        f"{msg}\n"
+        f"{t('motohours_line', total_hours=total_h, total_minutes=total_m)}\n"
+        f"{service_line}"
+    )
 
     await update.message.reply_text(msg)
 
@@ -1456,6 +1481,9 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
     now = dt.datetime.now()
 
     runtime, fuel_used_24h = get_stats(24)
+    total_runtime = get_total_runtime_seconds(now)
+    total_h, total_m = _hours_minutes_from_seconds(total_runtime)
+    service_line = _build_service_line(total_runtime)
 
     fuel_left = get_effective_fuel_left_now(now)
     remaining_time = format_remaining_time(fuel_left)
@@ -1479,6 +1507,11 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
             fuel_left=fuel_left,
             remaining_time=remaining_time,
         )
+    msg = (
+        f"{msg}\n\n"
+        f"{t('motohours_line', total_hours=total_h, total_minutes=total_m)}\n"
+        f"{service_line}"
+    )
 
     await send(app, msg)
 
@@ -1506,6 +1539,9 @@ async def monthly_report(context: ContextTypes.DEFAULT_TYPE):
 
     start, end = get_month_range(now)
     runtime, fuel_used, refuel_added = get_monthly_stats(start, end)
+    total_runtime = get_total_runtime_seconds(now)
+    total_h, total_m = _hours_minutes_from_seconds(total_runtime)
+    service_line = _build_service_line(total_runtime)
 
     month_label = start.strftime("%Y-%m")
     msg = t(
@@ -1516,6 +1552,11 @@ async def monthly_report(context: ContextTypes.DEFAULT_TYPE):
         runtime_minutes=(runtime % 3600) // 60,
         fuel_used=fuel_used,
         refuel_added=refuel_added,
+    )
+    msg = (
+        f"{msg}\n"
+        f"{t('motohours_line', total_hours=total_h, total_minutes=total_m)}\n"
+        f"{service_line}"
     )
 
     await send(context.application, msg)
